@@ -21,6 +21,7 @@ export default function LoginScreen() {
   const { user, userRole } = useAuth();
 
   useEffect(() => {
+    console.log(user);
     if (user) {
       if (userRole === "user") {
         router.replace("/(user)/home");

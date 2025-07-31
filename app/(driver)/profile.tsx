@@ -23,7 +23,7 @@ export default function ProfileScreen() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const docRef = doc(firestore, "drivers", user?.uid || "");
+        const docRef = doc(firestore, "users", user?.uid || "");
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           setProfile(docSnap.data());
@@ -44,34 +44,64 @@ export default function ProfileScreen() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.background }}>
+      <View
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          backgroundColor: colors.background,
+        }}
+      >
         <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: colors.background, padding: 24 }}>
-      <Text style={{ fontSize: 24, color: colors.primary, fontWeight: "bold", marginBottom: 16 }}>
+    <ScrollView
+      style={{ flex: 1, backgroundColor: colors.background, padding: 24 }}
+    >
+      <Text
+        style={{
+          fontSize: 24,
+          color: colors.primary,
+          fontWeight: "bold",
+          marginBottom: 16,
+        }}
+      >
         Driver Profile
       </Text>
 
       <Text style={{ color: colors.text, marginBottom: 8 }}>Name:</Text>
-      <Text style={{ color: "#fff", marginBottom: 16 }}>{profile?.name || "N/A"}</Text>
+      <Text style={{ color: "#fff", marginBottom: 16 }}>
+        {profile?.name || "N/A"}
+      </Text>
 
       <Text style={{ color: colors.text, marginBottom: 8 }}>User Type:</Text>
-      <Text style={{ color: "#fff", marginBottom: 16 }}>{profile?.userType || "N/A"}</Text>
+      <Text style={{ color: "#fff", marginBottom: 16 }}>
+        {profile?.userType || "N/A"}
+      </Text>
 
       <Text style={{ color: colors.text, marginBottom: 8 }}>Rating:</Text>
-      <Text style={{ color: "#fff", marginBottom: 16 }}>{profile?.rating || "N/A"}</Text>
+      <Text style={{ color: "#fff", marginBottom: 16 }}>
+        {profile?.rating || "N/A"}
+      </Text>
 
       <Text style={{ color: colors.text, marginBottom: 8 }}>Status:</Text>
-      <Text style={{ color: "#fff", marginBottom: 16 }}>{profile?.status || "N/A"}</Text>
+      <Text style={{ color: "#fff", marginBottom: 16 }}>
+        {profile?.status || "N/A"}
+      </Text>
 
       <Text style={{ color: colors.text, marginBottom: 8 }}>Vehicle Info:</Text>
-      <Text style={{ color: "#fff", marginBottom: 4 }}>License Plate: {profile?.vehicleInfo?.licensePlate || "N/A"}</Text>
-      <Text style={{ color: "#fff", marginBottom: 4 }}>Model: {profile?.vehicleInfo?.model || "N/A"}</Text>
-      <Text style={{ color: "#fff", marginBottom: 16 }}>Type: {profile?.vehicleInfo?.type || "N/A"}</Text>
+      <Text style={{ color: "#fff", marginBottom: 4 }}>
+        License Plate: {profile?.vehicleInfo?.licensePlate || "N/A"}
+      </Text>
+      <Text style={{ color: "#fff", marginBottom: 4 }}>
+        Model: {profile?.vehicleInfo?.model || "N/A"}
+      </Text>
+      <Text style={{ color: "#fff", marginBottom: 16 }}>
+        Type: {profile?.vehicleInfo?.type || "N/A"}
+      </Text>
 
       <Pressable
         onPress={() => router.push("/edit")}
@@ -86,19 +116,18 @@ export default function ProfileScreen() {
         <Text style={{ color: "#fff", fontWeight: "600" }}>Edit Profile</Text>
       </Pressable>
 
-<Pressable
-  onPress={signOut}
-  style={{
-    backgroundColor: "#d9534f",
-    padding: 16,
-    borderRadius: 8,
-    alignItems: "center",
-    marginTop: 16,
-  }}
->
-  <Text style={{ color: "#fff", fontWeight: "600" }}>Logout</Text>
-</Pressable>
-
+      <Pressable
+        onPress={signOut}
+        style={{
+          backgroundColor: "#d9534f",
+          padding: 16,
+          borderRadius: 8,
+          alignItems: "center",
+          marginTop: 16,
+        }}
+      >
+        <Text style={{ color: "#fff", fontWeight: "600" }}>Logout</Text>
+      </Pressable>
     </ScrollView>
   );
 }
