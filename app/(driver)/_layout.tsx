@@ -15,10 +15,10 @@ export default function UserLayout() {
     );
   }
 
-  if (!user || userRole !== "user") {
+  // Fix this condition - check for driver role specifically
+  if (!user || userRole !== "driver") {
     return <Redirect href="/(auth)/login" />;
   }
-
   return (
     <Stack
       screenOptions={{

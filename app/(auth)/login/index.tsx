@@ -1,4 +1,3 @@
-// app/(auth)/login/index.tsx
 import { useState, useEffect } from "react";
 import {
   View,
@@ -11,6 +10,7 @@ import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "@/config/firebase";
 import { useRouter } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
+import { colors } from "@/utils/colors";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
@@ -20,7 +20,6 @@ export default function LoginScreen() {
   const router = useRouter();
   const { user, userRole } = useAuth();
 
-  // Redirect if already logged in
   useEffect(() => {
     if (user) {
       if (userRole === "user") {
@@ -36,7 +35,6 @@ export default function LoginScreen() {
     setError("");
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      // Navigation handled by auth state change
     } catch (error: any) {
       setError(error.message);
     } finally {
@@ -45,10 +43,14 @@ export default function LoginScreen() {
   };
 
   return (
-    <View className="flex-1 bg-white p-6 justify-center">
-      <Text className="text-2xl font-bold mb-6">Login to RideApp</Text>
+    <View style={{ flex: 1, backgroundColor: colors.background, padding: 24, justifyContent: "center" }}>
+      <Text style={{ fontSize: 24, fontWeight: "bold", marginBottom: 24, color: colors.primary }}>
+        Login to RideApp
+      </Text>
 
-      {error ? <Text className="text-red-500 mb-4">{error}</Text> : null}
+      {error ? (
+        <Text style={{ color: colors.error, marginBottom: 16 }}>{error}</Text>
+      ) : null}
 
       <TextInput
         placeholder="Email"
@@ -56,7 +58,16 @@ export default function LoginScreen() {
         onChangeText={setEmail}
         keyboardType="email-address"
         autoCapitalize="none"
-        className="border border-gray-300 p-3 rounded mb-4"
+        placeholderTextColor={colors.secondary}
+        style={{
+          borderWidth: 1,
+          borderColor: "#ccc",
+          padding: 12,
+          borderRadius: 8,
+          marginBottom: 16,
+          color: colors.text,
+          backgroundColor: "#fff",
+        }}
       />
 
       <TextInput
@@ -64,33 +75,44 @@ export default function LoginScreen() {
         value={password}
         onChangeText={setPassword}
         secureTextEntry
-        className="border border-gray-300 p-3 rounded mb-6"
+        placeholderTextColor={colors.secondary}
+        style={{
+          borderWidth: 1,
+          borderColor: "#ccc",
+          padding: 12,
+          borderRadius: 8,
+          marginBottom: 24,
+          color: colors.text,
+          backgroundColor: "#fff",
+        }}
       />
 
       <Pressable
         onPress={handleLogin}
         disabled={loading}
-        className="bg-blue-500 p-3 rounded items-center"
+        style={{
+          backgroundColor: colors.primary,
+          padding: 16,
+          borderRadius: 8,
+          alignItems: "center",
+        }}
       >
         {loading ? (
-          <ActivityIndicator color="white" />
+          <ActivityIndicator color="#fff" />
         ) : (
-          <Text className="text-white font-medium">Login</Text>
+          <Text style={{ color: "#fff", fontWeight: "600" }}>Login</Text>
         )}
       </Pressable>
 
-      <View className="flex-row justify-center mt-4">
-        <Text className="text-gray-600">Don't have an account? </Text>
+      <View style={{ flexDirection: "row", justifyContent: "center", marginTop: 16 }}>
+        <Text style={{ color: colors.secondary }}>Don't have an account? </Text>
         <Pressable onPress={() => router.push("/(auth)/role-selection")}>
-          <Text className="text-blue-500">Sign up</Text>
+          <Text style={{ color: colors.primary }}>Sign up</Text>
         </Pressable>
       </View>
 
-      <Pressable
-        onPress={() => router.push("/(auth)/forgot-password")}
-        className="mt-2"
-      >
-        <Text className="text-blue-500 text-center">Forgot password?</Text>
+      <Pressable onPress={() => router.push("/(auth)/forgot-password")} style={{ marginTop: 8 }}>
+        <Text style={{ color: colors.primary, textAlign: "center" }}>Forgot password?</Text>
       </Pressable>
     </View>
   );

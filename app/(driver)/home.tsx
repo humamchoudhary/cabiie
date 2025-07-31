@@ -8,6 +8,8 @@ import MapView, { Marker, Circle, PROVIDER_GOOGLE } from "react-native-maps";
 import { ref, onValue, off, update } from "firebase/database";
 import { doc, updateDoc } from "firebase/firestore";
 import { firestore, database } from "@/config/firebase";
+import { MaterialIcons } from "@expo/vector-icons";
+
 
 export default function DriverHomeScreen() {
   const { user } = useAuth();
@@ -289,7 +291,7 @@ export default function DriverHomeScreen() {
       </View>
 
       {/* Status Bar */}
-      <View className="absolute top-4 left-0 right-0 px-4">
+      <View className="absolute top-16 left-0 right-0 px-4">
         <View className="bg-white p-3 rounded-lg shadow-sm flex-row justify-between items-center">
           <View>
             <Text className="font-bold">Status: Available</Text>
@@ -303,8 +305,19 @@ export default function DriverHomeScreen() {
             <View className="w-2 h-2 bg-green-500 rounded-full mr-1"></View>
             <Text className="text-gray-600 text-sm">Active</Text>
           </View>
-        </View>
+
+        </View>      
+
       </View>
+          <Pressable
+          onPress={() => router.push("/(driver)/profile")}
+          className="absolute top-4 left-4 bg-white p-2 rounded-full shadow"
+        >
+          <MaterialIcons name="person" size={24} color="#3B82F6" />
+        </Pressable>
+      
     </View>
+
+    
   );
 }

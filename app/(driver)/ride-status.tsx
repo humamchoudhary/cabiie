@@ -1,4 +1,3 @@
-// app/(driver)/ride-status/index.tsx
 import { useState, useEffect } from "react";
 import {
   View,
@@ -37,8 +36,11 @@ export default function DriverRideStatusScreen() {
   const [currentLocation, setCurrentLocation] = useState<any>(null);
   const [showDetails, setShowDetails] = useState(false);
   const [rideDistance, setRideDistance] = useState<number | null>(null);
+  const [rideStage, setRideStage] = useState<'pending' | 'started' | 'completed'>('pending');
   const router = useRouter();
   const { user } = useAuth();
+  const [hasReachedPickup, setHasReachedPickup] = useState(false);
+  const [hasReachedDestination, setHasReachedDestination] = useState(false);
 
   // Calculate distance between two coordinates (Haversine formula)
   const calculateDistance = (
@@ -62,7 +64,7 @@ export default function DriverRideStatusScreen() {
 
   // Calculate ride earnings
   const calculateEarnings = () => {
-    if (!rideDistance || !ride?.rideType) return PRICING.minFare;
+    if (!rideDistance || !ride?.rideType) return PRICING.minFare.toFixed(2);
 
     const base = PRICING.baseFare;
     const perKmRate =
@@ -79,6 +81,52 @@ export default function DriverRideStatusScreen() {
     Linking.openURL(url);
   };
 
+  const startRide = async () => {
+    try {
+      await updateDoc(doc(firestore, "rides", rideId as string), {
+        status: "in_progress",
+        startedAt: new Date().toISOString()
+      });
+      setRideStage('started');
+    } catch (error) {
+      Alert.alert("Error", "Failed to start ride");
+    }
+  };
+
+  const completeRide = async () => {
+    try {
+      const earnings = calculateEarnings();
+      
+      await updateDoc(doc(firestore, "rides", rideId as string), {
+        status: "completed",
+        completedAt: new Date().toISOString(),
+        distance: rideDistance,
+        earnings: parseFloat(earnings),
+      });
+
+      // Update driver status
+      await update(ref(database, `drivers/${user?.uid}`), {
+        status: "available",
+        currentRide: null,
+      });
+
+      // Update driver's total earnings in Firestore
+      const driverRef = doc(firestore, "drivers", user?.uid);
+      const driverDoc = await getDoc(driverRef);
+      if (driverDoc.exists()) {
+        const currentEarnings = driverDoc.data().totalEarnings || 0;
+        await updateDoc(driverRef, {
+          totalEarnings: currentEarnings + parseFloat(earnings),
+          completedRides: (driverDoc.data().completedRides || 0) + 1,
+        });
+      }
+
+      setRideStage('completed');
+    } catch (error) {
+      Alert.alert("Error", "Failed to complete ride");
+    }
+  };
+
   useEffect(() => {
     if (!rideId) return;
 
@@ -88,6 +136,15 @@ export default function DriverRideStatusScreen() {
       (doc) => {
         const rideData = doc.data();
         setRide(rideData);
+
+        // Set ride stage based on status
+        if (rideData?.status === "completed") {
+          setRideStage('completed');
+        } else if (rideData?.status === "in_progress") {
+          setRideStage('started');
+        } else {
+          setRideStage('pending');
+        }
 
         // Calculate distance when we have all locations
         if (rideData?.pickupLocation && rideData?.destinationLocation) {
@@ -146,42 +203,37 @@ export default function DriverRideStatusScreen() {
     };
   }, [rideId]);
 
-  const completeRide = async () => {
-    try {
-      const earnings = calculateEarnings();
+  // Add this useEffect to check proximity to pickup and destination
+  useEffect(() => {
+    if (!currentLocation || !ride) return;
 
-      // Update ride status and earnings
-      await updateDoc(doc(firestore, "rides", rideId as string), {
-        status: "completed",
-        completedAt: new Date().toISOString(),
-        distance: rideDistance,
-        earnings: parseFloat(earnings),
-      });
-
-      // Update driver status and earnings
-      await update(ref(database, `drivers/${user?.uid}`), {
-        status: "available",
-        currentRide: null,
-      });
-
-      // Update driver's total earnings in Firestore
-      const driverRef = doc(firestore, "users", user?.uid);
-      const driverDoc = await getDoc(driverRef);
-      if (driverDoc.exists()) {
-        const currentEarnings = driverDoc.data().totalEarnings || 0;
-        await updateDoc(driverRef, {
-          totalEarnings: currentEarnings + parseFloat(earnings),
-          completedRides: (driverDoc.data().completedRides || 0) + 1,
-        });
-      }
-
-      router.replace("/(driver)/home");
-    } catch (error) {
-      Alert.alert("Error", "Failed to complete ride");
+    // Check if driver has reached pickup location
+    if (ride.pickupLocation && rideStage === 'pending') {
+      const distanceToPickup = calculateDistance(
+        currentLocation.coords.latitude,
+        currentLocation.coords.longitude,
+        ride.pickupLocation.latitude,
+        ride.pickupLocation.longitude
+      );
+      setHasReachedPickup(distanceToPickup < 0.05); // 50 meters
     }
-  };
+
+    // Check if driver has reached destination
+    if (ride.destinationLocation && rideStage === 'started') {
+      const distanceToDestination = calculateDistance(
+        currentLocation.coords.latitude,
+        currentLocation.coords.longitude,
+        ride.destinationLocation.latitude,
+        ride.destinationLocation.longitude
+      );
+      setHasReachedDestination(distanceToDestination < 0.05); // 50 meters
+    }
+  }, [currentLocation, ride, rideStage]);
 
   const getRideProgress = () => {
+    if (rideStage === 'pending') return 0;
+    if (rideStage === 'completed') return 100;
+    
     if (!currentLocation || !ride?.pickupLocation || !ride?.destinationLocation)
       return 0;
 
@@ -205,6 +257,78 @@ export default function DriverRideStatusScreen() {
     );
   };
 
+  const renderActionButtons = () => {
+    if (rideStage === 'completed') {
+      return (
+        <View className="mt-4 p-3 bg-gray-50 rounded-lg">
+          <Text className="text-center font-bold text-lg">
+            Ride Completed! Earnings: ${calculateEarnings()}
+          </Text>
+          <Pressable
+            onPress={() => router.replace("/(driver)/home")}
+            className="bg-blue-500 p-3 rounded-lg mt-4 items-center"
+          >
+            <Text className="text-white font-bold">Return to Home</Text>
+          </Pressable>
+        </View>
+      );
+    }
+
+    return (
+      <View className="flex-row space-x-3 mt-4">
+        <Pressable
+          onPress={() => {
+            Alert.alert(
+              "Cancel Ride",
+              "Are you sure you want to cancel this ride?",
+              [
+                { text: "No", style: "cancel" },
+                { 
+                  text: "Yes", 
+                  onPress: async () => {
+                    await updateDoc(doc(firestore, "rides", rideId as string), {
+                      status: "cancelled",
+                      cancelledAt: new Date().toISOString(),
+                    });
+                    await update(ref(database, `drivers/${user?.uid}`), {
+                      status: "available",
+                      currentRide: null,
+                    });
+                    router.replace("/(driver)/home");
+                  }
+                }
+              ]
+            );
+          }}
+          className="flex-1 bg-red-100 p-3 rounded-lg items-center border border-red-200"
+        >
+          <MaterialIcons name="cancel" size={24} color="red" />
+          <Text className="text-red-600 mt-1">Cancel Ride</Text>
+        </Pressable>
+
+        {rideStage === 'pending' && hasReachedPickup && (
+          <Pressable
+            onPress={startRide}
+            className="flex-1 bg-blue-500 p-3 rounded-lg items-center"
+            disabled={!hasReachedPickup}
+          >
+            <Text className="text-white font-bold">Start Ride</Text>
+          </Pressable>
+        )}
+
+        {rideStage === 'started' && hasReachedDestination && (
+          <Pressable
+            onPress={completeRide}
+            className="flex-1 bg-green-500 p-3 rounded-lg items-center"
+            disabled={!hasReachedDestination}
+          >
+            <Text className="text-white font-bold">Complete Ride</Text>
+          </Pressable>
+        )}
+      </View>
+    );
+  };
+
   return (
     <View className="flex-1 bg-gray-100">
       {/* Header */}
@@ -220,12 +344,10 @@ export default function DriverRideStatusScreen() {
                   : "Premium"}{" "}
             Ride
           </Text>
-          <Pressable
-            onPress={() => setShowDetails(true)}
-            className="bg-blue-50 p-2 rounded-full"
-          >
-            <MaterialIcons name="info-outline" size={20} color="blue" />
-          </Pressable>
+          <Text className="text-gray-600 capitalize">
+            {rideStage === 'pending' ? 'Ready to Start' : 
+             rideStage === 'started' ? 'In Progress' : 'Completed'}
+          </Text>
         </View>
 
         {/* Progress bar */}
@@ -358,12 +480,7 @@ export default function DriverRideStatusScreen() {
           </Pressable>
         </View>
 
-        <Pressable
-          onPress={completeRide}
-          className="bg-green-500 p-3 rounded-lg mt-4 items-center"
-        >
-          <Text className="text-white font-bold">Complete Ride</Text>
-        </Pressable>
+        {renderActionButtons()}
       </View>
 
       {/* Ride Details Modal */}
@@ -393,7 +510,10 @@ export default function DriverRideStatusScreen() {
 
                 <View className="flex-row justify-between">
                   <Text className="text-gray-600">Status:</Text>
-                  <Text className="font-bold capitalize">{ride.status}</Text>
+                  <Text className="font-bold capitalize">
+                    {rideStage === 'pending' ? 'Ready to Start' : 
+                     rideStage === 'started' ? 'In Progress' : 'Completed'}
+                  </Text>
                 </View>
 
                 <View className="flex-row justify-between">

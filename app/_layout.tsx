@@ -1,42 +1,35 @@
-// app/_layout.tsx
-import { Stack } from "expo-router";
-import { AuthProvider } from "@/context/AuthContext";
-import { ActivityIndicator, View } from "react-native";
+import { Redirect, Stack } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
-
-import "@/global.css";
+import { ActivityIndicator, View } from "react-native";
 import { colors } from "@/utils/colors";
 
-function AuthLayout() {
-  const { loading } = useAuth();
+export default function UserLayout() {
+  const { user, userRole, loading } = useAuth();
 
   if (loading) {
     return (
-      <View
-        style={{
-          flex: 1,
-          justifyContent: "center",
-          alignItems: "center",
-          backgroundColor: colors.background,
-        }}
-      >
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
         <ActivityIndicator size="large" />
       </View>
     );
   }
 
-  return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="index" options={{ headerShown: false }} />
-    </Stack>
-  );
-}
+  if (!user || userRole !== "user") {  // Changed from "driver" to "user"
+    return <Redirect href="/(auth)/login" />;
+  }
 
-export default function RootLayout() {
-  // seedDemoDrivers();
   return (
-    <AuthProvider>
-      <AuthLayout />
-    </AuthProvider>
+    <Stack
+      screenOptions={{
+        headerStyle: { backgroundColor: colors.background },
+        headerTitleStyle: { color: colors.text },
+        headerTintColor: colors.text,
+      }}
+    >
+      <Stack.Screen name="home" options={{ headerShown: false }} />
+      <Stack.Screen name="profile" options={{ title: "My Profile" }} />
+      <Stack.Screen name="ride-status" options={{ title: "Ride Status" }} />
+      <Stack.Screen name="waiting" options={{ title: "Finding Driver" }} />
+    </Stack>
   );
 }

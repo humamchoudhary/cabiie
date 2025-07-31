@@ -3,4 +3,5 @@ export const colors = {
   bg_accent: "#5c5f77",
   text: "#dce0e8",
   primary: "#df8e1d",
+  secondary: "#f2b705",
 };
