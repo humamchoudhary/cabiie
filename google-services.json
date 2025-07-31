@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "194509781434",
+    "project_id": "indrive-clone-e0ec9",
+    "storage_bucket": "indrive-clone-e0ec9.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:194509781434:android:6dc077363db59f51ac4583",
+        "android_client_info": {
+          "package_name": "com.cabiie.cabiie"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA2ptPlBs7GwYok8UhhQBwIGsDUS5esvAo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
