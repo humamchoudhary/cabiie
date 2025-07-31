@@ -14,7 +14,9 @@ export default function RideStatusScreen() {
   const [ride, setRide] = useState<any>(null);
   const [driver, setDriver] = useState<any>(null);
   const [driverLocation, setDriverLocation] = useState<any>(null);
-  const [rideStatusMessage, setRideStatusMessage] = useState("Waiting for driver to accept...");
+  const [rideStatusMessage, setRideStatusMessage] = useState(
+    "Waiting for driver to accept...",
+  );
   const router = useRouter();
 
   // Ride snapshot listener
@@ -25,7 +27,7 @@ export default function RideStatusScreen() {
       doc(firestore, "rides", rideId as string),
       (d) => {
         setRide(d.data());
-      }
+      },
     );
 
     return () => {
@@ -46,7 +48,7 @@ export default function RideStatusScreen() {
       ref(database, `drivers/${ride.driverId}`),
       (snapshot) => {
         setDriverLocation(snapshot.val());
-      }
+      },
     );
 
     getDriver();
@@ -110,6 +112,7 @@ export default function RideStatusScreen() {
       <View className="flex-1">
         {ride?.pickupLocation && driverLocation && (
           <MapView
+            provider="google"
             className="flex-1"
             initialRegion={{
               latitude: ride.pickupLocation.latitude,
@@ -141,7 +144,9 @@ export default function RideStatusScreen() {
       {ride?.status === "accepted" && (
         <View className="p-4 bg-white">
           <Pressable onPress={cancelRide} className="bg-red-500 p-3 rounded-lg">
-            <Text className="text-white text-center font-bold">Cancel Ride</Text>
+            <Text className="text-white text-center font-bold">
+              Cancel Ride
+            </Text>
           </Pressable>
         </View>
       )}
