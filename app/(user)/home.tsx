@@ -485,7 +485,7 @@ export default function UserHomeScreen() {
         }),
       ]);
 
-      router.push(`/(user)/status?rideId=${rideId}`);
+      router.push(`/(user)/ride-status?rideId=${rideId}`);
     } catch (error) {
       console.log(error);
       Alert.alert("Error", "Failed to request ride");

@@ -88,6 +88,7 @@ export default function DriverHomeScreen() {
   const [initialLoad, setInitialLoad] = useState(true);
 
   // Check for active ride on mount
+  // Check for active ride on mount
   useEffect(() => {
     if (!user?.uid) return;
 
@@ -105,12 +106,15 @@ export default function DriverHomeScreen() {
           const rideSnapshot = await get(rideRef);
           const rideData = rideSnapshot.val();
 
-          if (rideData && rideData.status !== "completed") {
+          if (
+            rideData &&
+            rideData.status !== "completed" &&
+            rideData.pickupLocation &&
+            rideData.destinationLocation
+          ) {
             let phase: RideStatus["phase"] = "navigating_to_pickup";
             if (rideData.status === "arrived") phase = "arrived_at_pickup";
             else if (rideData.status === "in_progress") phase = "ride_started";
-            else if (rideData.status === "navigating_to_destination")
-              phase = "navigating_to_destination";
 
             setRideStatus({ phase, currentRideId: driverData.currentRide });
             setCurrentRideDetails({ ...rideData, id: rideSnapshot.key });
@@ -130,7 +134,7 @@ export default function DriverHomeScreen() {
   useEffect(() => {
     if (initialLoad) return;
 
-    let intervalId: NodeJS.Timeout;
+    let intervalId;
 
     const updateLocation = async () => {
       setUpdatingLocation(true);
@@ -151,12 +155,14 @@ export default function DriverHomeScreen() {
         });
 
         if (user?.uid) {
-          await update(ref(database, `drivers/${user.uid}`), {
+          const updates = {
             latitude: location.coords.latitude,
             longitude: location.coords.longitude,
             lastUpdated: Date.now(),
             status: rideStatus.phase === "idle" ? "available" : "in_ride",
-          });
+          };
+
+          await updateDriverStatus(user.uid, updates);
         }
       } catch (error) {
         console.error("Error updating location:", error);
@@ -171,7 +177,7 @@ export default function DriverHomeScreen() {
     return () => {
       clearInterval(intervalId);
       if (user?.uid) {
-        update(ref(database, `drivers/${user.uid}`), { status: "offline" });
+        updateDriverStatus(user.uid, { status: "offline" });
       }
     };
   }, [user, rideStatus, initialLoad]);
@@ -187,7 +193,7 @@ export default function DriverHomeScreen() {
       const requests: RideRequest[] = [];
       snapshot.forEach((childSnapshot) => {
         const request = childSnapshot.val();
-        if (request.status === "searching" && !request.driverId) {
+        if (request.status === "searching" && !request.driverId && location) {
           const distance = calculateDistanceInKm(
             location.coords.latitude,
             location.coords.longitude,
@@ -212,28 +218,38 @@ export default function DriverHomeScreen() {
   }, [location, rideStatus, initialLoad]);
 
   // Current ride listener
+  // Current ride listener
   useEffect(() => {
     if (!rideStatus.currentRideId) return;
 
     const rideRef = ref(database, `rideRequests/${rideStatus.currentRideId}`);
     const unsubscribe = onValue(rideRef, (snapshot) => {
       const rideData = snapshot.val();
-      if (rideData) setCurrentRideDetails({ ...rideData, id: snapshot.key });
+      if (rideData && rideData.pickupLocation && rideData.destinationLocation) {
+        setCurrentRideDetails({ ...rideData, id: snapshot.key });
+      }
     });
 
     return () => off(rideRef);
   }, [rideStatus.currentRideId]);
 
+  const updateDriverStatus = async (driverId: string, updates: any) => {
+    // Update Realtime Database
+    await update(ref(database, `drivers/${driverId}`), updates);
+
+    // Update Firestore
+    const driverRef = doc(firestore, "users", driverId);
+    await updateDoc(driverRef, updates);
+  };
   const acceptRide = async (rideId: string) => {
     setLoading(true);
     try {
-      // Only update status and driver info
       await Promise.all([
-        update(ref(database, `rideRequests/${rideId}`), {
+        updateRideStatus(rideId, {
           status: "accepted",
           driverId: user?.uid,
         }),
-        update(ref(database, `drivers/${user?.uid}`), {
+        updateDriverStatus(user?.uid, {
           status: "in_ride",
           currentRide: rideId,
         }),
@@ -244,10 +260,20 @@ export default function DriverHomeScreen() {
         currentRideId: rideId,
       });
     } catch (error) {
-      Alert.alert("Error", "Failed to accept ride");
+      console.log(error);
+      Alert.alert("Error", `Failed to accept ride: ${error}`);
     } finally {
       setLoading(false);
     }
+  };
+
+  const updateRideStatus = async (rideId: string, updates: any) => {
+    // Update Realtime Database
+    await update(ref(database, `rideRequests/${rideId}`), updates);
+
+    // Update Firestore
+    const rideRef = doc(firestore, "rides", rideId);
+    await updateDoc(rideRef, updates);
   };
 
   const handleRideAction = async () => {
@@ -257,26 +283,25 @@ export default function DriverHomeScreen() {
     try {
       switch (rideStatus.phase) {
         case "navigating_to_pickup":
-          await update(ref(database, `rideRequests/${currentRideDetails.id}`), {
+          await updateRideStatus(currentRideDetails.id, {
             status: "arrived",
           });
           setRideStatus({ ...rideStatus, phase: "arrived_at_pickup" });
           break;
 
         case "arrived_at_pickup":
-          await update(ref(database, `rideRequests/${currentRideDetails.id}`), {
+          await updateRideStatus(currentRideDetails.id, {
             status: "in_progress",
           });
           setRideStatus({ ...rideStatus, phase: "ride_started" });
           break;
 
         case "ride_started":
-          // Skip the "navigating_to_destination" phase and go directly to completion
           await Promise.all([
-            update(ref(database, `rideRequests/${currentRideDetails.id}`), {
+            updateRideStatus(currentRideDetails.id, {
               status: "completed",
             }),
-            update(ref(database, `drivers/${user.uid}`), {
+            updateDriverStatus(user.uid, {
               status: "available",
               currentRide: null,
             }),
@@ -294,12 +319,17 @@ export default function DriverHomeScreen() {
   };
 
   const getNavigationDestination = () => {
-    if (!currentRideDetails) return null;
+    if (
+      !currentRideDetails ||
+      !currentRideDetails.pickupLocation ||
+      !currentRideDetails.destinationLocation
+    ) {
+      return null;
+    }
 
     switch (rideStatus.phase) {
       case "navigating_to_pickup":
       case "arrived_at_pickup":
-      case "ride_started":
         return currentRideDetails.pickupLocation;
       case "ride_started":
         return currentRideDetails.destinationLocation;
@@ -369,6 +399,7 @@ export default function DriverHomeScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <MapView
+        userInterfaceStyle="dark"
         provider={PROVIDER_GOOGLE}
         style={{ flex: 1 }}
         region={mapRegion}
@@ -387,21 +418,23 @@ export default function DriverHomeScreen() {
           />
         )}
 
-        {currentRideDetails && (
-          <>
-            <Marker
-              coordinate={currentRideDetails.pickupLocation}
-              title="Pickup Location"
-              pinColor="green"
-            />
-            <Marker
-              coordinate={currentRideDetails.destinationLocation}
-              title="Destination"
-              description={getDestinationAddress(currentRideDetails)}
-              pinColor="red"
-            />
-          </>
-        )}
+        {currentRideDetails &&
+          currentRideDetails.pickupLocation &&
+          currentRideDetails.destinationLocation && (
+            <>
+              <Marker
+                coordinate={currentRideDetails.pickupLocation}
+                title="Pickup Location"
+                pinColor="green"
+              />
+              <Marker
+                coordinate={currentRideDetails.destinationLocation}
+                title="Destination"
+                description={getDestinationAddress(currentRideDetails)}
+                pinColor="red"
+              />
+            </>
+          )}
 
         {rideStatus.phase === "idle" &&
           rideRequests.map((request) => (

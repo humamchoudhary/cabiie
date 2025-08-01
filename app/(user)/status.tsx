@@ -14,26 +14,20 @@ export default function WaitingScreen() {
   const { user } = useAuth();
 
   useEffect(() => {
+    console.log("Current rideId:", rideId);
     if (!rideId) return;
 
+    const docRef = doc(firestore, "rides", rideId as string);
+    console.log("Listening to document:", docRef.path);
+
     const unsubscribe = onSnapshot(
-      doc(firestore, "rides", rideId as string),
+      docRef,
       (d) => {
-        const data = d.data();
-        setRide(data);
-
-        if (data?.driverId) {
-          // Fetch driver details when assigned
-          const driverRef = doc(firestore, "users", data.driverId);
-          getDoc(driverRef).then((driverDoc) => {
-            setDriver(driverDoc.data());
-          });
-        }
-
-        // Navigate when ride is accepted
-        if (data?.status === "accepted") {
-          router.replace(`/(user)/ride-status?rideId=${rideId}`);
-        }
+        console.log("Received update:", d.exists() ? d.data() : null);
+        // rest of your code
+      },
+      (error) => {
+        console.error("Snapshot error:", error);
       },
     );
 
