@@ -20,32 +20,52 @@ import { doc, getDoc, setDoc } from "firebase/firestore";
 import { firestore, database } from "@/config/firebase";
 import { ref, onValue, off, set } from "firebase/database";
 import { colors } from "@/utils/colors";
-import { AntDesign, MaterialIcons, Ionicons } from "@expo/vector-icons";
+import {
+  AntDesign,
+  MaterialIcons,
+  Ionicons,
+  FontAwesome,
+  FontAwesome5,
+} from "@expo/vector-icons";
 
 const { height } = Dimensions.get("window");
 
 const rideTypes = [
-  { id: "bike", name: "Bike", icon: "🚲", multiplier: 1, time: "5-10 min" },
+  {
+    id: "bike",
+    name: "Bike",
+    icon: "motorcycle",
+    iconLib: FontAwesome5,
+    multiplier: 1,
+    time: "5-10 min",
+    baseRate: 10, // PKR per km
+  },
   {
     id: "car",
     name: "Standard",
-    icon: "🚗",
-    multiplier: 1.5,
+    icon: "car",
+    iconLib: FontAwesome5,
+    multiplier: 1,
     time: "8-15 min",
+    baseRate: 100, // PKR per km
   },
   {
     id: "car_plus",
     name: "Comfort",
-    icon: "🚙",
-    multiplier: 2,
+    icon: "car-sport",
+    iconLib: Ionicons,
+    multiplier: 1.5,
     time: "10-18 min",
+    baseRate: 150, // PKR per km
   },
   {
     id: "premium",
     name: "Premium",
-    icon: "🏎️",
-    multiplier: 3,
+    icon: "car",
+    iconLib: Ionicons,
+    multiplier: 2,
     time: "5-12 min",
+    baseRate: 200, // PKR per km
   },
 ];
 
@@ -76,30 +96,117 @@ export default function UserHomeScreen() {
     address?: string;
   } | null>(null);
   const [panelExpanded, setPanelExpanded] = useState(false);
+  const [estimatedFare, setEstimatedFare] = useState<number | null>(null);
+  const [estimatedDistance, setEstimatedDistance] = useState<number | null>(
+    null,
+  );
+  const [estimatedTime, setEstimatedTime] = useState<string | null>(null);
 
   // Get user location
+  // Update your useEffect for location
   useEffect(() => {
-    (async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert(
-          "Permission denied",
-          "We need location permission to find rides",
-        );
-        return;
-      }
+    let isMounted = true; // Add mounted check to prevent state updates on unmounted component
 
-      let location = await Location.getCurrentPositionAsync({});
-      setLocation(location);
-      setMapRegion({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-        latitudeDelta: 0.0922,
-        longitudeDelta: 0.0421,
-      });
+    (async () => {
+      try {
+        let { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert(
+            "Permission denied",
+            "We need location permission to find rides",
+          );
+          return;
+        }
+
+        // Enable high accuracy
+        let location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+        });
+
+        console.log("Location fetched:", location); // Add this for debugging
+
+        if (isMounted) {
+          setLocation(location);
+          setMapRegion({
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+            latitudeDelta: 0.0922,
+            longitudeDelta: 0.0421,
+          });
+        }
+      } catch (error) {
+        console.error("Error getting location:", error);
+        if (isMounted) {
+          Alert.alert(
+            "Location Error",
+            "Could not get your current location. Please try again.",
+          );
+        }
+      }
     })();
+
+    return () => {
+      isMounted = false; // Cleanup
+    };
   }, []);
 
+  useEffect(() => {
+    let isMounted = true;
+    let watchId: Location.LocationSubscription | null = null;
+
+    (async () => {
+      try {
+        let { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert(
+            "Permission denied",
+            "We need location permission to find rides",
+          );
+          return;
+        }
+
+        // Get initial position
+        let location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+        });
+
+        if (isMounted) {
+          setLocation(location);
+          setMapRegion({
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+            latitudeDelta: 0.0922,
+            longitudeDelta: 0.0421,
+          });
+        }
+
+        // Watch for position updates
+        watchId = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.High,
+            distanceInterval: 50, // Update every 50 meters
+            timeInterval: 5000, // Update every 5 seconds
+          },
+          (newLocation) => {
+            if (isMounted) {
+              setLocation(newLocation);
+              // You might not want to update the region on every small change
+              // to avoid the map jumping around
+            }
+          },
+        );
+      } catch (error) {
+        console.error("Location error:", error);
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+      if (watchId) {
+        watchId.remove(); // Cleanup the watcher
+      }
+    };
+  }, []);
   // Animate panel on mount
   useEffect(() => {
     Animated.spring(slideAnim, {
@@ -109,6 +216,30 @@ export default function UserHomeScreen() {
       friction: 8,
     }).start();
   }, []);
+
+  // Calculate fare when destination or ride type changes
+  useEffect(() => {
+    if (location && selectedLocation && selectedRide) {
+      const distance = calculateDistanceInKm(
+        location.coords.latitude,
+        location.coords.longitude,
+        selectedLocation.latitude,
+        selectedLocation.longitude,
+      );
+
+      const rideType = rideTypes.find((r) => r.id === selectedRide);
+      if (rideType) {
+        const fare = calculateFare(rideType.baseRate, distance);
+        setEstimatedDistance(distance);
+        setEstimatedFare(fare);
+        setEstimatedTime(calculateEstimatedTime(distance));
+      }
+    } else {
+      setEstimatedFare(null);
+      setEstimatedDistance(null);
+      setEstimatedTime(null);
+    }
+  }, [selectedLocation, selectedRide, location]);
 
   // Listen for nearby drivers
   useEffect(() => {
@@ -120,13 +251,13 @@ export default function UserHomeScreen() {
       snapshot.forEach((childSnapshot) => {
         const driver = childSnapshot.val();
         if (driver.status === "available") {
-          const distance = calculateDistance(
+          const distance = calculateDistanceInKm(
             location.coords.latitude,
             location.coords.longitude,
             driver.latitude,
             driver.longitude,
           );
-          if (distance <= 5) {
+          if (distance <= 6) {
             // Only show drivers within 5km
             drivers.push({
               id: childSnapshot.key,
@@ -142,13 +273,13 @@ export default function UserHomeScreen() {
     return () => off(driversRef);
   }, [location]);
 
-  const calculateDistance = (
+  const calculateDistanceInKm = (
     lat1: number,
     lon1: number,
     lat2: number,
     lon2: number,
   ) => {
-    const R = 6371;
+    const R = 6371; // Earth's radius in km
     const dLat = ((lat2 - lat1) * Math.PI) / 180;
     const dLon = ((lon2 - lon1) * Math.PI) / 180;
     const a =
@@ -161,6 +292,19 @@ export default function UserHomeScreen() {
     return R * c;
   };
 
+  const calculateEstimatedTime = (distance: number) => {
+    const averageSpeed = 30; // km/h (city traffic)
+    const timeInHours = distance / averageSpeed;
+    const minutes = Math.ceil(timeInHours * 60);
+    return minutes > 1 ? `${minutes} mins` : "1 min";
+  };
+
+  const calculateFare = (baseRate: number, distance: number) => {
+    const MIN_FARE = 100; // PKR
+    const calculatedFare = distance * baseRate;
+    return Math.ceil(Math.max(calculatedFare, MIN_FARE));
+  };
+
   const searchPlaces = async (query: string) => {
     if (query.length < 3) {
       setSearchResults([]);
@@ -169,7 +313,7 @@ export default function UserHomeScreen() {
     }
 
     try {
-      const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY; // Replace with your actual key
+      const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
       const response = await fetch(
         `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(
           query,
@@ -207,9 +351,7 @@ export default function UserHomeScreen() {
         }),
       );
 
-      // Filter out any failed detail fetches
       const validResults = results.filter((item) => item !== null);
-
       setSearchResults(validResults as any[]);
       setShowSearchResults(true);
     } catch (error) {
@@ -253,7 +395,6 @@ export default function UserHomeScreen() {
     });
     setShowSearchResults(false);
 
-    // Animate map to show both locations
     if (location && mapRef.current) {
       mapRef.current.fitToCoordinates(
         [
@@ -304,6 +445,16 @@ export default function UserHomeScreen() {
 
     setLoading(true);
     try {
+      const rideType = rideTypes.find((r) => r.id === selectedRide);
+      const distance = calculateDistanceInKm(
+        location.coords.latitude,
+        location.coords.longitude,
+        selectedLocation.latitude,
+        selectedLocation.longitude,
+      );
+
+      const fare = rideType ? calculateFare(rideType.baseRate, distance) : 100;
+
       const rideRequest = {
         userId: user?.uid,
         rideType: selectedRide,
@@ -318,18 +469,21 @@ export default function UserHomeScreen() {
         destinationAddress: selectedLocation.address || destination,
         status: "searching",
         createdAt: new Date().toISOString(),
+        distance: parseFloat(distance.toFixed(2)),
+        estimatedTime: calculateEstimatedTime(distance),
+        fare,
+        fareCurrency: "PKR",
       };
 
       const rideId = `ride_${Date.now()}`;
 
-      // Save to Firestore
-      await setDoc(doc(firestore, "rides", rideId), rideRequest);
-
-      // Save to Realtime DB
-      await set(ref(database, `rideRequests/${rideId}`), {
-        ...rideRequest,
-        id: rideId,
-      });
+      await Promise.all([
+        setDoc(doc(firestore, "rides", rideId), rideRequest),
+        set(ref(database, `rideRequests/${rideId}`), {
+          ...rideRequest,
+          id: rideId,
+        }),
+      ]);
 
       router.push(`/(user)/status?rideId=${rideId}`);
     } catch (error) {
@@ -345,18 +499,13 @@ export default function UserHomeScreen() {
       {/* Map View */}
       <MapView
         ref={mapRef}
+        userInterfaceStyle="dark"
         provider={PROVIDER_GOOGLE}
         style={{ flex: 1 }}
         region={mapRegion}
         onPress={handleMapPress}
         showsUserLocation={true}
         showsMyLocationButton={false}
-        customMapStyle={[
-          {
-            featureType: "all",
-            stylers: [{ saturation: -20 }, { lightness: -10 }],
-          },
-        ]}
       >
         {/* User Location */}
         {location && (
@@ -399,31 +548,42 @@ export default function UserHomeScreen() {
         )}
 
         {/* Nearby Drivers */}
-        {nearbyDrivers.map((driver) => (
-          <Marker
-            key={driver.id}
-            coordinate={{
-              latitude: driver.latitude,
-              longitude: driver.longitude,
-            }}
-            title={`Driver ${driver.id.slice(-4)}`}
-            description={`${driver.rideType.join(", ")} available`}
-          >
-            <View
-              style={{
-                backgroundColor: colors.text,
-                padding: 6,
-                borderRadius: 15,
-                borderWidth: 2,
-                borderColor: colors.primary,
+        {nearbyDrivers.map((driver) => {
+          const IconComponent = driver.rideType.includes("bike")
+            ? FontAwesome5
+            : FontAwesome5;
+          const iconName = driver.rideType.includes("bike")
+            ? "motorcycle"
+            : "car";
+
+          return (
+            <Marker
+              key={driver.id}
+              coordinate={{
+                latitude: driver.latitude,
+                longitude: driver.longitude,
               }}
+              title={`Driver ${driver.id.slice(-4)}`}
+              description={`${driver.rideType.join(", ")} available`}
             >
-              <Text style={{ fontSize: 12 }}>
-                {driver.rideType.includes("bike") ? "🚲" : "🚗"}
-              </Text>
-            </View>
-          </Marker>
-        ))}
+              <View
+                style={{
+                  backgroundColor: colors.text,
+                  padding: 6,
+                  borderRadius: 15,
+                  borderWidth: 2,
+                  borderColor: colors.primary,
+                }}
+              >
+                <IconComponent
+                  name={iconName}
+                  size={12}
+                  color={colors.primary}
+                />
+              </View>
+            </Marker>
+          );
+        })}
       </MapView>
 
       {/* Location Button */}
@@ -439,6 +599,8 @@ export default function UserHomeScreen() {
           borderColor: colors.border,
         }}
         onPress={() => {
+          console.log(location);
+          console.log(mapRef.current);
           if (location && mapRef.current) {
             mapRef.current.animateToRegion({
               latitude: location.coords.latitude,
@@ -467,6 +629,23 @@ export default function UserHomeScreen() {
         onPress={() => router.push("/profile")}
       >
         <AntDesign name="user" size={20} color={colors.primary} />
+      </TouchableOpacity>
+
+      {/* Rides History Button */}
+      <TouchableOpacity
+        style={{
+          position: "absolute",
+          top: 110,
+          left: 16,
+          backgroundColor: colors.bg_accent,
+          padding: 12,
+          borderRadius: 25,
+          borderWidth: 1,
+          borderColor: colors.border,
+        }}
+        onPress={() => router.push("/(user)/rides")}
+      >
+        <MaterialIcons name="history" size={20} color={colors.primary} />
       </TouchableOpacity>
 
       {/* Search Results Overlay */}
@@ -619,54 +798,149 @@ export default function UserHomeScreen() {
               Choose a ride
             </Text>
             <View style={{ gap: 12 }}>
-              {rideTypes.map((ride) => (
-                <Pressable
-                  key={ride.id}
-                  onPress={() => setSelectedRide(ride.id)}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    backgroundColor:
-                      selectedRide === ride.id
-                        ? colors.primary + "20"
-                        : colors.background,
-                    borderWidth: 1,
-                    borderColor:
-                      selectedRide === ride.id ? colors.primary : colors.border,
-                    borderRadius: 12,
-                    padding: 16,
-                  }}
-                >
-                  <Text style={{ fontSize: 24, marginRight: 12 }}>
-                    {ride.icon}
-                  </Text>
-                  <View style={{ flex: 1 }}>
-                    <Text
+              {rideTypes.map((ride) => {
+                const IconComponent = ride.iconLib;
+                return (
+                  <Pressable
+                    key={ride.id}
+                    onPress={() => setSelectedRide(ride.id)}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      backgroundColor:
+                        selectedRide === ride.id
+                          ? colors.primary + "20"
+                          : colors.background,
+                      borderWidth: 1,
+                      borderColor:
+                        selectedRide === ride.id
+                          ? colors.primary
+                          : colors.border,
+                      borderRadius: 12,
+                      padding: 16,
+                    }}
+                  >
+                    <View
                       style={{
-                        color: colors.text,
-                        fontWeight: "600",
-                        fontSize: 16,
+                        backgroundColor:
+                          selectedRide === ride.id
+                            ? colors.primary
+                            : colors.border,
+                        padding: 8,
+                        borderRadius: 8,
+                        marginRight: 12,
                       }}
                     >
-                      {ride.name}
-                    </Text>
-                    <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                      {ride.time} •{" "}
-                      {
-                        nearbyDrivers.filter((d) =>
-                          d.rideType.includes(ride.id),
-                        ).length
-                      }{" "}
-                      nearby
-                    </Text>
-                  </View>
-                  <Text style={{ color: colors.primary, fontWeight: "600" }}>
-                    ${(15 * ride.multiplier).toFixed(0)}
-                  </Text>
-                </Pressable>
-              ))}
+                      <IconComponent
+                        name={ride.icon}
+                        size={20}
+                        color={
+                          selectedRide === ride.id
+                            ? colors.background
+                            : colors.text
+                        }
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={{
+                          color: colors.text,
+                          fontWeight: "600",
+                          fontSize: 16,
+                        }}
+                      >
+                        {ride.name}
+                      </Text>
+                      <Text
+                        style={{ color: colors.textSecondary, fontSize: 12 }}
+                      >
+                        {ride.time} •{" "}
+                        {
+                          nearbyDrivers.filter((d) =>
+                            d.rideType.includes(ride.id),
+                          ).length
+                        }{" "}
+                        nearby
+                      </Text>
+                    </View>
+                    {estimatedFare && selectedRide === ride.id ? (
+                      <Text
+                        style={{ color: colors.primary, fontWeight: "600" }}
+                      >
+                        {estimatedFare.toFixed(0)} PKR
+                      </Text>
+                    ) : (
+                      <Text
+                        style={{ color: colors.textSecondary, fontSize: 12 }}
+                      >
+                        {ride.baseRate} PKR/km
+                      </Text>
+                    )}
+                  </Pressable>
+                );
+              })}
             </View>
           </View>
+
+          {/* Ride Details */}
+          {selectedRide && selectedLocation && (
+            <View
+              style={{
+                backgroundColor: colors.background,
+                borderRadius: 12,
+                padding: 16,
+                marginBottom: 20,
+                borderWidth: 1,
+                borderColor: colors.border,
+              }}
+            >
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                }}
+              >
+                <Text style={{ color: colors.textSecondary }}>Distance</Text>
+                <Text style={{ color: colors.text }}>
+                  {estimatedDistance
+                    ? estimatedDistance.toFixed(1) + " km"
+                    : "--"}
+                </Text>
+              </View>
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  marginTop: 8,
+                }}
+              >
+                <Text style={{ color: colors.textSecondary }}>
+                  Estimated Time
+                </Text>
+                <Text style={{ color: colors.text }}>
+                  {estimatedTime || "--"}
+                </Text>
+              </View>
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  marginTop: 8,
+                }}
+              >
+                <Text style={{ color: colors.textSecondary }}>Fare</Text>
+                <Text
+                  style={{
+                    color: colors.primary,
+                    fontWeight: "600",
+                    fontSize: 16,
+                  }}
+                >
+                  {estimatedFare ? estimatedFare.toFixed(0) + " PKR" : "--"}
+                </Text>
+              </View>
+            </View>
+          )}
 
           {/* Request Button */}
           <Pressable

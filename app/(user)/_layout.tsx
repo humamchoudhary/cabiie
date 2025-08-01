@@ -30,7 +30,11 @@ export default function UserLayout() {
       <Stack.Screen name="home" options={{ headerShown: false }} />
       <Stack.Screen name="profile" options={{ title: "My Profile" }} />
       <Stack.Screen name="status" options={{ title: "Status" }} />
-      <Stack.Screen name="ride-status" options={{ title: "Ride Status" }} />
+      <Stack.Screen
+        name="ride-status"
+        options={{ title: "Ride Status", headerShown: false }}
+      />
+      <Stack.Screen name="rides" options={{ headerShown: false }} />
     </Stack>
   );
 }

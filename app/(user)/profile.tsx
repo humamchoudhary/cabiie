@@ -1,4 +1,12 @@
-import { View, Text, Pressable, Image, StyleSheet } from "react-native";
+// app/(user)/profile.tsx
+import {
+  View,
+  Text,
+  Pressable,
+  Image,
+  StyleSheet,
+  ScrollView,
+} from "react-native";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "expo-router";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -9,8 +17,48 @@ export default function UserProfileScreen() {
   const { user, signOut } = useAuth();
   const router = useRouter();
 
+  const menuItems = [
+    {
+      id: "rides",
+      title: "My Rides",
+      subtitle: "View ride history and active rides",
+      icon: "directions-car",
+      onPress: () => router.push("/(user)/rides"),
+    },
+    {
+      id: "payment",
+      title: "Payment Methods",
+      subtitle: "Manage your payment options",
+      icon: "payment",
+      onPress: () => {
+        // TODO: Implement payment methods screen
+        console.log("Navigate to payment methods");
+      },
+    },
+    {
+      id: "support",
+      title: "Help & Support",
+      subtitle: "Get help with your rides",
+      icon: "help",
+      onPress: () => {
+        // TODO: Implement support screen
+        console.log("Navigate to support");
+      },
+    },
+    {
+      id: "settings",
+      title: "Settings",
+      subtitle: "App preferences and notifications",
+      icon: "settings",
+      onPress: () => {
+        // TODO: Implement settings screen
+        console.log("Navigate to settings");
+      },
+    },
+  ];
+
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       <View style={styles.profileHeader}>
         {user?.photoURL ? (
           <Image source={{ uri: user.photoURL }} style={styles.avatar} />
@@ -21,58 +69,116 @@ export default function UserProfileScreen() {
         )}
         <Text style={styles.name}>{user?.displayName || "User"}</Text>
         <Text style={styles.email}>{user?.email}</Text>
+
+        <View style={styles.statsContainer}>
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>4.8</Text>
+            <Text style={styles.statLabel}>Rating</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>12</Text>
+            <Text style={styles.statLabel}>Trips</Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.menuContainer}>
+        {menuItems.map((item) => (
+          <Pressable
+            key={item.id}
+            onPress={item.onPress}
+            style={styles.menuItem}
+          >
+            <View style={styles.menuIconContainer}>
+              <MaterialIcons
+                name={item.icon as any}
+                size={24}
+                color={colors.primary}
+              />
+            </View>
+            <View style={styles.menuContent}>
+              <Text style={styles.menuTitle}>{item.title}</Text>
+              <Text style={styles.menuSubtitle}>{item.subtitle}</Text>
+            </View>
+            <MaterialIcons
+              name="chevron-right"
+              size={24}
+              color={colors.textSecondary}
+            />
+          </Pressable>
+        ))}
       </View>
 
       <View style={styles.infoContainer}>
         <View style={styles.infoItem}>
-          <MaterialIcons name="phone" size={24} color="#4a5568" />
+          <MaterialIcons name="phone" size={24} color={colors.textSecondary} />
           <Text style={styles.infoText}>
             {user?.phoneNumber || "Not provided"}
           </Text>
         </View>
 
         <View style={styles.infoItem}>
-          <MaterialIcons name="account-circle" size={24} color="#4a5568" />
+          <MaterialIcons
+            name="account-circle"
+            size={24}
+            color={colors.textSecondary}
+          />
           <Text style={styles.infoText}>Passenger Account</Text>
         </View>
 
         <View style={styles.infoItem}>
-          <MaterialIcons name="history" size={24} color="#4a5568" />
-          <Text style={styles.infoText}>Ride History</Text>
+          <MaterialIcons name="verified" size={24} color={colors.primary} />
+          <Text style={styles.infoText}>Verified Account</Text>
         </View>
       </View>
 
       <Pressable onPress={signOut} style={styles.logoutButton}>
+        <MaterialIcons
+          name="logout"
+          size={20}
+          color="#e78284"
+          style={{ marginRight: 8 }}
+        />
         <Text style={styles.logoutText}>Sign Out</Text>
       </Pressable>
-    </View>
+
+      <View style={{ height: 40 }} />
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
     backgroundColor: colors.background,
   },
   profileHeader: {
     alignItems: "center",
-    marginBottom: 30,
+    paddingVertical: 32,
+    paddingHorizontal: 20,
+    backgroundColor: colors.bg_accent,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   avatar: {
     width: 120,
     height: 120,
     borderRadius: 60,
     marginBottom: 15,
+    borderWidth: 3,
+    borderColor: colors.primary,
   },
   avatarPlaceholder: {
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: "#94a3b8",
+    backgroundColor: colors.primary + "20",
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 15,
+    borderWidth: 3,
+    borderColor: colors.primary,
   },
   name: {
     fontSize: 24,
@@ -82,25 +188,94 @@ const styles = StyleSheet.create({
   },
   email: {
     fontSize: 16,
+    color: colors.textSecondary,
+    marginBottom: 20,
+  },
+  statsContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.background,
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  statItem: {
+    alignItems: "center",
+    flex: 1,
+  },
+  statNumber: {
+    fontSize: 20,
+    fontWeight: "bold",
     color: colors.text,
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  statDivider: {
+    width: 1,
+    height: 30,
+    backgroundColor: colors.border,
+    marginHorizontal: 20,
+  },
+  menuContainer: {
+    backgroundColor: colors.bg_accent,
+    marginHorizontal: 16,
+    marginTop: 20,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  menuItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  menuIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.primary + "20",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  menuContent: {
+    flex: 1,
+  },
+  menuTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: colors.text,
+    marginBottom: 2,
+  },
+  menuSubtitle: {
+    fontSize: 12,
+    color: colors.textSecondary,
   },
   infoContainer: {
     backgroundColor: colors.bg_accent,
     borderRadius: 12,
-    padding: 20,
-    marginBottom: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
+    marginHorizontal: 16,
+    marginTop: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   infoItem: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 15,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: colors.background,
+    borderBottomColor: colors.border,
   },
   infoText: {
     marginLeft: 15,
@@ -108,14 +283,20 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   logoutButton: {
-    backgroundColor: "#e78284",
-    padding: 15,
-    borderRadius: 8,
+    backgroundColor: colors.bg_accent,
+    marginHorizontal: 16,
+    marginTop: 20,
+    padding: 16,
+    borderRadius: 12,
     alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#e78284",
   },
   logoutText: {
-    color: colors.text,
-    fontWeight: "bold",
+    color: "#e78284",
+    fontWeight: "600",
     fontSize: 16,
   },
 });

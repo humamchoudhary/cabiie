@@ -14,8 +14,8 @@ import { useRouter } from "expo-router";
 import * as Location from "expo-location";
 import * as Geocoding from "expo-location";
 import MapView, { Marker, Circle, PROVIDER_GOOGLE } from "react-native-maps";
-import { ref, onValue, off, update } from "firebase/database";
-import { doc, updateDoc } from "firebase/firestore";
+import { ref, onValue, off, update, get } from "firebase/database";
+import { doc, updateDoc, getDoc } from "firebase/firestore";
 import { firestore, database } from "@/config/firebase";
 import { MaterialIcons } from "@expo/vector-icons";
 import { colors } from "@/utils/colors";
@@ -36,18 +36,35 @@ interface RideRequest {
   status: string;
   createdAt: string;
   driverId?: string;
-  distance: number;
+  distance?: number;
+  estimatedTime?: string;
+  fare?: number;
+  fareCurrency?: string;
 }
 
 interface RideStatus {
-  phase:
-    | "idle"
-    | "navigating_to_pickup"
-    | "arrived_at_pickup"
-    | "ride_started"
-    | "navigating_to_destination";
+  phase: "idle" | "navigating_to_pickup" | "arrived_at_pickup" | "ride_started";
   currentRideId?: string;
 }
+
+const calculateDistanceInKm = (
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number,
+) => {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+};
 
 export default function DriverHomeScreen() {
   const { user } = useAuth();
@@ -64,53 +81,55 @@ export default function DriverHomeScreen() {
   const [mapRegion, setMapRegion] = useState({
     latitude: 0,
     longitude: 0,
-    latitudeDelta: 0,
-    longitudeDelta: 0,
+    latitudeDelta: 0.0922,
+    longitudeDelta: 0.0421,
   });
   const [addresses, setAddresses] = useState<Record<string, string>>({});
+  const [initialLoad, setInitialLoad] = useState(true);
 
-  // Get human-readable address from coordinates
-  const getAddressFromCoords = useCallback(async (lat: number, lng: number) => {
-    try {
-      const address = await Geocoding.reverseGeocodeAsync({
-        latitude: lat,
-        longitude: lng,
-      });
-      if (address.length > 0) {
-        const firstAddress = address[0];
-        return `${firstAddress.name || firstAddress.street}, ${firstAddress.city}`;
-      }
-      return `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-    } catch (error) {
-      console.error("Geocoding error:", error);
-      return `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-    }
-  }, []);
-
-  // Update address cache for ride requests
-  const updateAddresses = useCallback(
-    async (requests: RideRequest[]) => {
-      const newAddresses: Record<string, string> = {};
-
-      for (const request of requests) {
-        const destKey = `${request.destinationLocation.latitude},${request.destinationLocation.longitude}`;
-        if (!addresses[destKey]) {
-          newAddresses[destKey] = await getAddressFromCoords(
-            request.destinationLocation.latitude,
-            request.destinationLocation.longitude,
-          );
-        }
-      }
-
-      if (Object.keys(newAddresses).length > 0) {
-        setAddresses((prev) => ({ ...prev, ...newAddresses }));
-      }
-    },
-    [addresses, getAddressFromCoords],
-  );
-
-  // Get current location and update to Realtime DB
+  // Check for active ride on mount
   useEffect(() => {
+    if (!user?.uid) return;
+
+    const checkActiveRide = async () => {
+      try {
+        const driverRef = ref(database, `drivers/${user.uid}`);
+        const driverSnapshot = await get(driverRef);
+        const driverData = driverSnapshot.val();
+
+        if (driverData?.currentRide) {
+          const rideRef = ref(
+            database,
+            `rideRequests/${driverData.currentRide}`,
+          );
+          const rideSnapshot = await get(rideRef);
+          const rideData = rideSnapshot.val();
+
+          if (rideData && rideData.status !== "completed") {
+            let phase: RideStatus["phase"] = "navigating_to_pickup";
+            if (rideData.status === "arrived") phase = "arrived_at_pickup";
+            else if (rideData.status === "in_progress") phase = "ride_started";
+            else if (rideData.status === "navigating_to_destination")
+              phase = "navigating_to_destination";
+
+            setRideStatus({ phase, currentRideId: driverData.currentRide });
+            setCurrentRideDetails({ ...rideData, id: rideSnapshot.key });
+          }
+        }
+      } catch (error) {
+        console.error("Error checking active ride:", error);
+      } finally {
+        setInitialLoad(false);
+      }
+    };
+
+    checkActiveRide();
+  }, [user]);
+
+  // Location updates
+  useEffect(() => {
+    if (initialLoad) return;
+
     let intervalId: NodeJS.Timeout;
 
     const updateLocation = async () => {
@@ -118,10 +137,7 @@ export default function DriverHomeScreen() {
       try {
         let { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== "granted") {
-          Alert.alert(
-            "Permission required",
-            "Location permission is needed to receive ride requests",
-          );
+          Alert.alert("Permission required", "Location permission is needed");
           return;
         }
 
@@ -134,16 +150,12 @@ export default function DriverHomeScreen() {
           longitudeDelta: 0.0421,
         });
 
-        // Update to Realtime DB
         if (user?.uid) {
-          const driverStatus =
-            rideStatus.phase === "idle" ? "available" : "in_ride";
           await update(ref(database, `drivers/${user.uid}`), {
             latitude: location.coords.latitude,
             longitude: location.coords.longitude,
             lastUpdated: Date.now(),
-            status: driverStatus,
-            rideType: ["car", "car_plus"],
+            status: rideStatus.phase === "idle" ? "available" : "in_ride",
           });
         }
       } catch (error) {
@@ -153,34 +165,30 @@ export default function DriverHomeScreen() {
       }
     };
 
-    // Initial update
     updateLocation();
-
-    // Update every 15 seconds
     intervalId = setInterval(updateLocation, 15000);
 
     return () => {
       clearInterval(intervalId);
-      // Clean up Realtime DB listener
       if (user?.uid) {
         update(ref(database, `drivers/${user.uid}`), { status: "offline" });
       }
     };
-  }, [user, rideStatus]);
+  }, [user, rideStatus, initialLoad]);
 
-  // Listen for nearby ride requests (only show "searching" status)
+  // Ride requests listener
   useEffect(() => {
-    if (!location || rideStatus.phase !== "idle") return;
+    if (initialLoad || !location || rideStatus.phase !== "idle") return;
 
-    const radius = 6; // 6km radius
+    const radius = 6;
     const rideRequestsRef = ref(database, "rideRequests");
 
-    const unsubscribe = onValue(rideRequestsRef, async (snapshot) => {
+    const unsubscribe = onValue(rideRequestsRef, (snapshot) => {
       const requests: RideRequest[] = [];
       snapshot.forEach((childSnapshot) => {
         const request = childSnapshot.val();
         if (request.status === "searching" && !request.driverId) {
-          const distance = calculateDistance(
+          const distance = calculateDistanceInKm(
             location.coords.latitude,
             location.coords.longitude,
             request.pickupLocation.latitude,
@@ -188,79 +196,49 @@ export default function DriverHomeScreen() {
           );
 
           if (distance <= radius) {
-            requests.push({ ...request, id: childSnapshot.key, distance });
+            requests.push({
+              ...request,
+              id: childSnapshot.key,
+              distance,
+            });
           }
         }
       });
 
-      // Sort by distance (closest first)
-      requests.sort((a, b) => a.distance - b.distance);
-      setRideRequests(requests);
-
-      // Update addresses for new requests
-      await updateAddresses(requests);
+      setRideRequests(requests.sort((a, b) => a.distance - b.distance));
     });
 
     return () => off(rideRequestsRef);
-  }, [location, rideStatus, updateAddresses]);
+  }, [location, rideStatus, initialLoad]);
 
-  // Monitor current ride status
+  // Current ride listener
   useEffect(() => {
     if (!rideStatus.currentRideId) return;
 
     const rideRef = ref(database, `rideRequests/${rideStatus.currentRideId}`);
     const unsubscribe = onValue(rideRef, (snapshot) => {
       const rideData = snapshot.val();
-      if (rideData) {
-        setCurrentRideDetails({ ...rideData, id: snapshot.key });
-      }
+      if (rideData) setCurrentRideDetails({ ...rideData, id: snapshot.key });
     });
 
     return () => off(rideRef);
   }, [rideStatus.currentRideId]);
 
-  const calculateDistance = (
-    lat1: number,
-    lon1: number,
-    lat2: number,
-    lon2: number,
-  ) => {
-    const R = 6371; // Earth's radius in km
-    const dLat = ((lat2 - lat1) * Math.PI) / 180;
-    const dLon = ((lon2 - lon1) * Math.PI) / 180;
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos((lat1 * Math.PI) / 180) *
-        Math.cos((lat2 * Math.PI) / 180) *
-        Math.sin(dLon / 2) *
-        Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
-  };
-
   const acceptRide = async (rideId: string) => {
     setLoading(true);
     try {
-      // Update in Firestore
-      await updateDoc(doc(firestore, "rides", rideId), {
-        status: "accepted",
-        driverId: user?.uid,
-        acceptedAt: new Date().toISOString(),
-      });
+      // Only update status and driver info
+      await Promise.all([
+        update(ref(database, `rideRequests/${rideId}`), {
+          status: "accepted",
+          driverId: user?.uid,
+        }),
+        update(ref(database, `drivers/${user?.uid}`), {
+          status: "in_ride",
+          currentRide: rideId,
+        }),
+      ]);
 
-      // Update in Realtime DB
-      await update(ref(database, `rideRequests/${rideId}`), {
-        status: "accepted",
-        driverId: user?.uid,
-      });
-
-      // Update driver status
-      await update(ref(database, `drivers/${user?.uid}`), {
-        status: "in_ride",
-        currentRide: rideId,
-      });
-
-      // Set ride status to navigate to pickup
       setRideStatus({
         phase: "navigating_to_pickup",
         currentRideId: rideId,
@@ -279,58 +257,32 @@ export default function DriverHomeScreen() {
     try {
       switch (rideStatus.phase) {
         case "navigating_to_pickup":
-          // Driver has arrived at pickup location
           await update(ref(database, `rideRequests/${currentRideDetails.id}`), {
-            status: "driver_arrived",
+            status: "arrived",
           });
-          setRideStatus({
-            ...rideStatus,
-            phase: "arrived_at_pickup",
-          });
+          setRideStatus({ ...rideStatus, phase: "arrived_at_pickup" });
           break;
 
         case "arrived_at_pickup":
-          // Start the ride
           await update(ref(database, `rideRequests/${currentRideDetails.id}`), {
             status: "in_progress",
-            rideStartedAt: Date.now(),
           });
-          setRideStatus({
-            ...rideStatus,
-            phase: "ride_started",
-          });
+          setRideStatus({ ...rideStatus, phase: "ride_started" });
           break;
 
         case "ride_started":
-          // Navigate to destination
-          setRideStatus({
-            ...rideStatus,
-            phase: "navigating_to_destination",
-          });
-          break;
-
-        case "navigating_to_destination":
-          // Complete the ride
-          await update(ref(database, `rideRequests/${currentRideDetails.id}`), {
-            status: "completed",
-            completedAt: Date.now(),
-          });
-
-          await updateDoc(doc(firestore, "rides", currentRideDetails.id), {
-            status: "completed",
-            completedAt: new Date().toISOString(),
-          });
-
-          // Reset driver status
-          await update(ref(database, `drivers/${user.uid}`), {
-            status: "available",
-            currentRide: null,
-          });
-
-          // Reset ride status
+          // Skip the "navigating_to_destination" phase and go directly to completion
+          await Promise.all([
+            update(ref(database, `rideRequests/${currentRideDetails.id}`), {
+              status: "completed",
+            }),
+            update(ref(database, `drivers/${user.uid}`), {
+              status: "available",
+              currentRide: null,
+            }),
+          ]);
           setRideStatus({ phase: "idle" });
           setCurrentRideDetails(null);
-
           Alert.alert("Success", "Ride completed successfully!");
           break;
       }
@@ -349,7 +301,7 @@ export default function DriverHomeScreen() {
       case "arrived_at_pickup":
       case "ride_started":
         return currentRideDetails.pickupLocation;
-      case "navigating_to_destination":
+      case "ride_started":
         return currentRideDetails.destinationLocation;
       default:
         return null;
@@ -363,9 +315,7 @@ export default function DriverHomeScreen() {
       case "arrived_at_pickup":
         return "Start Ride";
       case "ride_started":
-        return "Navigate to Destination";
-      case "navigating_to_destination":
-        return "Complete Ride";
+        return "Complete Ride"; // Changed from "Navigate to Destination"
       default:
         return "";
     }
@@ -378,9 +328,7 @@ export default function DriverHomeScreen() {
       case "arrived_at_pickup":
         return "Arrived at Pickup";
       case "ride_started":
-        return "Ride in Progress";
-      case "navigating_to_destination":
-        return "Navigating to Destination";
+        return "Ride in Progress"; // Removed "navigating_to_destination" case
       default:
         return "Available";
     }
@@ -409,9 +357,17 @@ export default function DriverHomeScreen() {
     return addresses[destKey] || request.destinationAddress || "Destination";
   };
 
+  if (initialLoad) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={{ marginTop: 16, color: colors.text }}>Loading...</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      {/* Map View */}
       <MapView
         provider={PROVIDER_GOOGLE}
         style={{ flex: 1 }}
@@ -420,7 +376,6 @@ export default function DriverHomeScreen() {
         showsMyLocationButton={true}
         onRegionChangeComplete={setMapRegion}
       >
-        {/* Driver Location */}
         {location && (
           <Marker
             coordinate={{
@@ -432,7 +387,6 @@ export default function DriverHomeScreen() {
           />
         )}
 
-        {/* Current Ride Markers */}
         {currentRideDetails && (
           <>
             <Marker
@@ -449,7 +403,6 @@ export default function DriverHomeScreen() {
           </>
         )}
 
-        {/* Nearby Ride Requests (only when idle) */}
         {rideStatus.phase === "idle" &&
           rideRequests.map((request) => (
             <Marker
@@ -480,21 +433,19 @@ export default function DriverHomeScreen() {
             </Marker>
           ))}
 
-        {/* Search Radius Circle (only when idle) */}
         {location && rideStatus.phase === "idle" && (
           <Circle
             center={{
               latitude: location.coords.latitude,
               longitude: location.coords.longitude,
             }}
-            radius={6000} // 6km in meters
+            radius={6000}
             strokeColor={colors.primary + "80"}
             fillColor={colors.primary + "20"}
           />
         )}
       </MapView>
 
-      {/* Current Ride Panel */}
       {rideStatus.phase !== "idle" && currentRideDetails && (
         <View
           style={{
@@ -531,6 +482,25 @@ export default function DriverHomeScreen() {
             </Text>
             <Text style={{ color: colors.text }}>
               Destination: {getDestinationAddress(currentRideDetails)}
+            </Text>
+            <Text style={{ color: colors.textSecondary, marginTop: 4 }}>
+              Distance: {currentRideDetails.distance?.toFixed(1) || "--"} km
+            </Text>
+            <Text style={{ color: colors.textSecondary }}>
+              Estimated Time: {currentRideDetails.estimatedTime || "--"}
+            </Text>
+            <Text
+              style={{
+                color: colors.primary,
+                fontWeight: "bold",
+                marginTop: 4,
+              }}
+            >
+              Fare:{" "}
+              {currentRideDetails.fare
+                ? Math.ceil(currentRideDetails.fare)
+                : "--"}{" "}
+              PKR
             </Text>
           </View>
 
@@ -588,7 +558,6 @@ export default function DriverHomeScreen() {
         </View>
       )}
 
-      {/* Ride Requests Panel (only when idle) */}
       {rideStatus.phase === "idle" && (
         <View
           style={{
@@ -719,6 +688,27 @@ export default function DriverHomeScreen() {
                     To: {getDestinationAddress(request)}
                   </Text>
 
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                      Est. Time: {request.estimatedTime}
+                    </Text>
+                    <Text
+                      style={{
+                        color: colors.primary,
+                        fontWeight: "bold",
+                        fontSize: 12,
+                      }}
+                    >
+                      Fare:
+                      {request.fare ? Math.ceil(request.fare) : "--"} PKR
+                    </Text>
+                  </View>
+
                   <Pressable
                     onPress={() => acceptRide(request.id)}
                     disabled={loading}
@@ -731,6 +721,7 @@ export default function DriverHomeScreen() {
                       flexDirection: "row",
                       gap: 8,
                       opacity: loading ? 0.7 : 1,
+                      marginTop: 8,
                     }}
                   >
                     {loading ? (
@@ -772,7 +763,6 @@ export default function DriverHomeScreen() {
         </View>
       )}
 
-      {/* Status Bar */}
       <View
         style={{
           position: "absolute",
@@ -821,7 +811,6 @@ export default function DriverHomeScreen() {
         </View>
       </View>
 
-      {/* Profile Button */}
       <Pressable
         onPress={() => router.push("/(driver)/profile")}
         style={{

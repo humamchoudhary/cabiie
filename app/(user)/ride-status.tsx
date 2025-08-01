@@ -15,6 +15,8 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { doc, getDoc, onSnapshot, updateDoc } from "firebase/firestore";
+
+import * as Location from "expo-location";
 import { firestore } from "@/config/firebase";
 import { ref, onValue } from "firebase/database";
 import { database } from "@/config/firebase";
@@ -31,6 +33,10 @@ const { height, width } = Dimensions.get("window");
 
 export default function RideStatusScreen() {
   const { rideId } = useLocalSearchParams();
+
+  const [location, setLocation] = useState<Location.LocationObject | null>(
+    null,
+  );
   const [ride, setRide] = useState<any>(null);
   const [driver, setDriver] = useState<any>(null);
   const [driverLocation, setDriverLocation] = useState<any>(null);
@@ -46,6 +52,46 @@ export default function RideStatusScreen() {
   const router = useRouter();
   const mapRef = useRef<MapView>(null);
   const slideAnim = useRef(new Animated.Value(height * 0.3)).current;
+
+  useEffect(() => {
+    let isMounted = true; // Add mounted check to prevent state updates on unmounted component
+
+    (async () => {
+      try {
+        let { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert(
+            "Permission denied",
+            "We need location permission to find rides",
+          );
+          return;
+        }
+
+        // Enable high accuracy
+        let location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+        });
+
+        console.log("Location fetched:", location); // Add this for debugging
+
+        if (isMounted) {
+          setLocation(location);
+        }
+      } catch (error) {
+        console.error("Error getting location:", error);
+        if (isMounted) {
+          Alert.alert(
+            "Location Error",
+            "Could not get your current location. Please try again.",
+          );
+        }
+      }
+    })();
+
+    return () => {
+      isMounted = false; // Cleanup
+    };
+  }, []);
 
   // Ride snapshot listener
   useEffect(() => {
@@ -249,8 +295,8 @@ export default function RideStatusScreen() {
   };
 
   const callDriver = () => {
-    if (driver?.phoneNumber) {
-      Linking.openURL(`tel:${driver.phoneNumber}`);
+    if (driver?.phone) {
+      Linking.openURL(`tel:${driver.phone}`);
     } else {
       Alert.alert("Error", "Driver phone number not available");
     }
@@ -302,9 +348,9 @@ export default function RideStatusScreen() {
       case "accepted":
         return "car";
       case "arrived":
-        return "location-pin";
+        return "location";
       case "in_progress":
-        return "navigation";
+        return "navigate";
       case "completed":
         return "checkmark-circle";
       case "cancelled":
@@ -314,23 +360,44 @@ export default function RideStatusScreen() {
     }
   };
 
+  const callEmergency = () => {
+    Linking.openURL(`tel:15`);
+  };
+
+  const shareDriverDetails = () => {
+    if (!driver) return;
+
+    const driverDetails = `
+🚖 *Driver Details* 🚖
+  
+*Name:* ${driver.name}
+*Phone:* ${driver.phone}
+*Vehicle:* ${driver.vehicleInfo?.make || ""} ${driver.vehicleInfo?.model || ""}
+*License Plate:* ${driver.vehicleInfo?.licensePlate || ""}
+*Rating:* ${driver.rating || "5.0"} ⭐
+  
+*CNIC:* ${driver.cnic || "Not available"}
+*License Number:* ${driver.licenseNumber || "Not available"}
+  
+I'm currently using this ride service and want to share these details for safety purposes.
+  `.trim();
+
+    const url = `https://wa.me/?text=${encodeURIComponent(driverDetails)}`;
+
+    Linking.openURL(url);
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       {/* Map View */}
       <MapView
         ref={mapRef}
+        userInterfaceStyle="dark"
         provider={PROVIDER_GOOGLE}
         style={{ flex: 1 }}
-        showsUserLocation={false}
+        showsUserLocation={true}
         showsMyLocationButton={false}
-        customMapStyle={[
-          {
-            featureType: "all",
-            stylers: [{ saturation: -20 }, { lightness: -10 }],
-          },
-        ]}
       >
-        {/* Pickup Location */}
         {ride?.pickupLocation && (
           <Marker
             coordinate={{
@@ -412,6 +479,65 @@ export default function RideStatusScreen() {
           />
         )}
       </MapView>
+
+      <TouchableOpacity
+        style={{
+          position: "absolute",
+          top: 120,
+          right: 16,
+          backgroundColor: colors.bg_accent,
+          padding: 12,
+          borderRadius: 25,
+          borderWidth: 1,
+          borderColor: colors.border,
+        }}
+        onPress={() => {
+          console.log(location);
+          console.log(mapRef.current);
+          if (location && mapRef.current) {
+            mapRef.current.animateToRegion({
+              latitude: location.coords.latitude,
+              longitude: location.coords.longitude,
+              latitudeDelta: 0.0922,
+              longitudeDelta: 0.0421,
+            });
+          }
+        }}
+      >
+        <MaterialIcons name="my-location" size={20} color={colors.primary} />
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={{
+          position: "absolute",
+          top: 180,
+          right: 16,
+          backgroundColor: "#ef4444",
+          padding: 12,
+          borderRadius: 25,
+          borderWidth: 1,
+          borderColor: colors.border,
+        }}
+        onPress={callEmergency}
+      >
+        <MaterialIcons name="emergency" size={20} color={colors.background} />
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={{
+          position: "absolute",
+          top: 240,
+          right: 16,
+          backgroundColor: "#25D366",
+          padding: 12,
+          borderRadius: 25,
+          borderWidth: 1,
+          borderColor: colors.border,
+        }}
+        onPress={shareDriverDetails}
+      >
+        <Ionicons name="logo-whatsapp" size={20} color={colors.background} />
+      </TouchableOpacity>
 
       {/* Back Button */}
       <TouchableOpacity
