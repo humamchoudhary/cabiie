@@ -1,6 +1,16 @@
 // app/context/AuthContext.tsx
-import { createContext, useContext, useEffect, useState, useCallback } from "react";
-import { onAuthStateChanged, User, signOut as authSignOut } from "firebase/auth";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useCallback,
+} from "react";
+import {
+  onAuthStateChanged,
+  User,
+  signOut as authSignOut,
+} from "firebase/auth";
 import { auth, firestore } from "@/config/firebase";
 import { doc, getDoc } from "firebase/firestore";
 
@@ -21,7 +31,7 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   error: null,
   refreshUserRole: async () => {},
-  signOut: async () => {}
+  signOut: async () => {},
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -30,29 +40,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  const refreshUserRole = useCallback(async (uid?: string) => {
-    try {
-      const userId = uid || user?.uid;
-      if (!userId) {
-        setUserRole("unset");
-        return;
-      }
+  const refreshUserRole = useCallback(
+    async (uid?: string) => {
+      try {
+        const userId = uid || user?.uid;
+        if (!userId) {
+          setUserRole("unset");
+          return;
+        }
 
-      const userDoc = await getDoc(doc(firestore, "users", userId));
-      if (userDoc.exists()) {
-        const role = userDoc.data().userType as UserRole;
-        setUserRole(role || "unset");
-      } else {
+        const userDoc = await getDoc(doc(firestore, "users", userId));
+        if (userDoc.exists()) {
+          const role = userDoc.data().userType as UserRole;
+          setUserRole(role || "unset");
+        } else {
+          setUserRole("unset");
+          console.warn("User document not found in Firestore");
+        }
+        setError(null);
+        console.log(userId);
+      } catch (err) {
+        console.error("Error fetching user role:", err);
         setUserRole("unset");
-        console.warn("User document not found in Firestore");
+        setError(
+          err instanceof Error ? err : new Error("Failed to fetch user role"),
+        );
       }
-      setError(null);
-    } catch (err) {
-      console.error("Error fetching user role:", err);
-      setUserRole("unset");
-      setError(err instanceof Error ? err : new Error("Failed to fetch user role"));
-    }
-  }, [user?.uid]);
+    },
+    [user?.uid],
+  );
 
   const signOut = useCallback(async () => {
     try {
@@ -71,17 +87,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         setLoading(true);
         setUser(user);
-        
+
         if (user) {
           await refreshUserRole(user.uid);
         } else {
           setUserRole("unset");
         }
-        
+
         setError(null);
       } catch (err) {
         console.error("Auth state change error:", err);
-        setError(err instanceof Error ? err : new Error("Auth state change failed"));
+        setError(
+          err instanceof Error ? err : new Error("Auth state change failed"),
+        );
       } finally {
         setLoading(false);
       }
@@ -94,13 +112,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ 
-        user, 
-        userRole, 
-        loading, 
+      value={{
+        user,
+        userRole,
+        loading,
         error,
-        refreshUserRole, 
-        signOut 
+        refreshUserRole,
+        signOut,
       }}
     >
       {children}
@@ -111,7 +129,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 };

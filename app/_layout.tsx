@@ -1,4 +1,6 @@
 // app/_layout.tsx
+
+import "react-native-get-random-values";
 import { Stack } from "expo-router";
 import { AuthProvider } from "@/context/AuthContext";
 import { ActivityIndicator, View } from "react-native";
@@ -37,7 +39,7 @@ export default function RootLayout() {
   // seedDemoDrivers();
   return (
     <AuthProvider>
-      <StatusBar style="dark" translucent={true} />
+      <StatusBar style="dark" />
       <AuthLayout />
     </AuthProvider>
   );

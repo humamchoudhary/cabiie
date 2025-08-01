@@ -1,4 +1,3 @@
-// app/(user)/waiting/index.tsx
 import { useState, useEffect } from "react";
 import { View, Text, ActivityIndicator, Pressable, Alert } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
