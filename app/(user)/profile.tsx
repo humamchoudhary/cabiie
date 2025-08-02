@@ -72,11 +72,6 @@ export default function UserProfileScreen() {
 
         <View style={styles.statsContainer}>
           <View style={styles.statItem}>
-            <Text style={styles.statNumber}>4.8</Text>
-            <Text style={styles.statLabel}>Rating</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
             <Text style={styles.statNumber}>12</Text>
             <Text style={styles.statLabel}>Trips</Text>
           </View>

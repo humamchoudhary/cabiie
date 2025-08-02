@@ -8,6 +8,9 @@ import {
   Alert,
   ScrollView,
   Linking,
+  TouchableOpacity,
+  Animated,
+  Dimensions,
 } from "react-native";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "expo-router";
@@ -17,8 +20,10 @@ import MapView, { Marker, Circle, PROVIDER_GOOGLE } from "react-native-maps";
 import { ref, onValue, off, update, get } from "firebase/database";
 import { doc, updateDoc, getDoc } from "firebase/firestore";
 import { firestore, database } from "@/config/firebase";
-import { MaterialIcons } from "@expo/vector-icons";
+import { MaterialIcons, Feather, FontAwesome5 } from "@expo/vector-icons";
 import { colors } from "@/utils/colors";
+
+const { height } = Dimensions.get("window");
 
 interface RideRequest {
   id: string;
@@ -88,7 +93,6 @@ export default function DriverHomeScreen() {
   const [initialLoad, setInitialLoad] = useState(true);
 
   // Check for active ride on mount
-  // Check for active ride on mount
   useEffect(() => {
     if (!user?.uid) return;
 
@@ -134,7 +138,7 @@ export default function DriverHomeScreen() {
   useEffect(() => {
     if (initialLoad) return;
 
-    let intervalId;
+    let intervalId: NodeJS.Timeout;
 
     const updateLocation = async () => {
       setUpdatingLocation(true);
@@ -175,7 +179,9 @@ export default function DriverHomeScreen() {
     intervalId = setInterval(updateLocation, 15000);
 
     return () => {
-      clearInterval(intervalId);
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
       if (user?.uid) {
         updateDriverStatus(user.uid, { status: "offline" });
       }
@@ -211,13 +217,12 @@ export default function DriverHomeScreen() {
         }
       });
 
-      setRideRequests(requests.sort((a, b) => a.distance - b.distance));
+      setRideRequests(requests.sort((a, b) => (a.distance || 0) - (b.distance || 0)));
     });
 
     return () => off(rideRequestsRef);
   }, [location, rideStatus, initialLoad]);
 
-  // Current ride listener
   // Current ride listener
   useEffect(() => {
     if (!rideStatus.currentRideId) return;
@@ -234,22 +239,29 @@ export default function DriverHomeScreen() {
   }, [rideStatus.currentRideId]);
 
   const updateDriverStatus = async (driverId: string, updates: any) => {
-    // Update Realtime Database
-    await update(ref(database, `drivers/${driverId}`), updates);
+    try {
+      // Update Realtime Database
+      await update(ref(database, `drivers/${driverId}`), updates);
 
-    // Update Firestore
-    const driverRef = doc(firestore, "users", driverId);
-    await updateDoc(driverRef, updates);
+      // Update Firestore
+      const driverRef = doc(firestore, "users", driverId);
+      await updateDoc(driverRef, updates);
+    } catch (error) {
+      console.error("Error updating driver status:", error);
+    }
   };
+
   const acceptRide = async (rideId: string) => {
+    if (!user?.uid) return;
+    
     setLoading(true);
     try {
       await Promise.all([
         updateRideStatus(rideId, {
           status: "accepted",
-          driverId: user?.uid,
+          driverId: user.uid,
         }),
-        updateDriverStatus(user?.uid, {
+        updateDriverStatus(user.uid, {
           status: "in_ride",
           currentRide: rideId,
         }),
@@ -268,12 +280,16 @@ export default function DriverHomeScreen() {
   };
 
   const updateRideStatus = async (rideId: string, updates: any) => {
-    // Update Realtime Database
-    await update(ref(database, `rideRequests/${rideId}`), updates);
+    try {
+      // Update Realtime Database
+      await update(ref(database, `rideRequests/${rideId}`), updates);
 
-    // Update Firestore
-    const rideRef = doc(firestore, "rides", rideId);
-    await updateDoc(rideRef, updates);
+      // Update Firestore
+      const rideRef = doc(firestore, "rides", rideId);
+      await updateDoc(rideRef, updates);
+    } catch (error) {
+      console.error("Error updating ride status:", error);
+    }
   };
 
   const handleRideAction = async () => {
@@ -345,7 +361,7 @@ export default function DriverHomeScreen() {
       case "arrived_at_pickup":
         return "Start Ride";
       case "ride_started":
-        return "Complete Ride"; // Changed from "Navigate to Destination"
+        return "Complete Ride";
       default:
         return "";
     }
@@ -358,7 +374,7 @@ export default function DriverHomeScreen() {
       case "arrived_at_pickup":
         return "Arrived at Pickup";
       case "ride_started":
-        return "Ride in Progress"; // Removed "navigating_to_destination" case
+        return "Ride in Progress";
       default:
         return "Available";
     }
@@ -387,24 +403,67 @@ export default function DriverHomeScreen() {
     return addresses[destKey] || request.destinationAddress || "Destination";
   };
 
+  const getRideTypeIcon = (rideType: string) => {
+    switch (rideType) {
+      case "bike":
+        return "🚲";
+      case "car":
+        return "🚗";
+      case "car_plus":
+        return "🚙";
+      case "premium":
+        return "🏎️";
+      default:
+        return "🚗";
+    }
+  };
+
+  const getRideTypeName = (rideType: string) => {
+    switch (rideType) {
+      case "bike":
+        return "Bike";
+      case "car":
+        return "Standard";
+      case "car_plus":
+        return "Comfort";
+      case "premium":
+        return "Premium";
+      default:
+        return "Standard";
+    }
+  };
+
   if (initialLoad) {
     return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+      <View style={{ 
+        flex: 1, 
+        justifyContent: "center", 
+        alignItems: "center",
+        backgroundColor: colors.background 
+      }}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={{ marginTop: 16, color: colors.text }}>Loading...</Text>
+        <Text style={{ 
+          marginTop: 16, 
+          color: colors.text,
+          fontSize: 16,
+          fontWeight: "500"
+        }}>
+          Loading...
+        </Text>
       </View>
     );
   }
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
+      {/* Map View */}
       <MapView
         userInterfaceStyle="dark"
         provider={PROVIDER_GOOGLE}
         style={{ flex: 1 }}
         region={mapRegion}
         showsUserLocation={true}
-        showsMyLocationButton={true}
+        showsMyLocationButton={false}
         onRegionChangeComplete={setMapRegion}
       >
         {location && (
@@ -414,8 +473,19 @@ export default function DriverHomeScreen() {
               longitude: location.coords.longitude,
             }}
             title="Your Location"
-            pinColor={colors.primary}
-          />
+          >
+            <View
+              style={{
+                backgroundColor: colors.primary,
+                padding: 8,
+                borderRadius: 20,
+                borderWidth: 3,
+                borderColor: colors.background,
+              }}
+            >
+              <MaterialIcons name="local-taxi" size={16} color={colors.background} />
+            </View>
+          </Marker>
         )}
 
         {currentRideDetails &&
@@ -425,14 +495,36 @@ export default function DriverHomeScreen() {
               <Marker
                 coordinate={currentRideDetails.pickupLocation}
                 title="Pickup Location"
-                pinColor="green"
-              />
+              >
+                <View
+                  style={{
+                    backgroundColor: "#10B981",
+                    padding: 8,
+                    borderRadius: 20,
+                    borderWidth: 3,
+                    borderColor: colors.background,
+                  }}
+                >
+                  <MaterialIcons name="person" size={16} color={colors.background} />
+                </View>
+              </Marker>
               <Marker
                 coordinate={currentRideDetails.destinationLocation}
                 title="Destination"
                 description={getDestinationAddress(currentRideDetails)}
-                pinColor="red"
-              />
+              >
+                <View
+                  style={{
+                    backgroundColor: "#EF4444",
+                    padding: 8,
+                    borderRadius: 20,
+                    borderWidth: 3,
+                    borderColor: colors.background,
+                  }}
+                >
+                  <MaterialIcons name="place" size={16} color={colors.background} />
+                </View>
+              </Marker>
             </>
           )}
 
@@ -441,26 +533,20 @@ export default function DriverHomeScreen() {
             <Marker
               key={request.id}
               coordinate={request.pickupLocation}
-              title={`${request.rideType} Ride`}
-              description={`${request.distance.toFixed(1)} km away`}
+              title={`${getRideTypeName(request.rideType)} Ride`}
+              description={`${(request.distance || 0).toFixed(1)} km away`}
             >
               <View
                 style={{
                   backgroundColor: colors.primary,
                   padding: 8,
                   borderRadius: 20,
-                  borderWidth: 2,
-                  borderColor: colors.text,
+                  borderWidth: 3,
+                  borderColor: colors.background,
                 }}
               >
-                <Text style={{ color: "white", fontSize: 16 }}>
-                  {request.rideType === "bike"
-                    ? "🚲"
-                    : request.rideType === "car"
-                      ? "🚗"
-                      : request.rideType === "car_plus"
-                        ? "🚙"
-                        : "🏎️"}
+                <Text style={{ fontSize: 16 }}>
+                  {getRideTypeIcon(request.rideType)}
                 </Text>
               </View>
             </Marker>
@@ -479,92 +565,287 @@ export default function DriverHomeScreen() {
         )}
       </MapView>
 
+      {/* Top Bar Container */}
+      <View
+        style={{
+          position: "absolute",
+          top: 16,
+          left: 16,
+          right: 16,
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "center",
+          zIndex: 10,
+        }}
+      >
+        {/* Profile Button */}
+        <Pressable
+          onPress={() => router.push("/(driver)/profile")}
+          style={{
+            backgroundColor: colors.bg_accent,
+            padding: 8,
+            borderRadius: 20,
+            borderWidth: 1,
+            borderColor: colors.border,
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.1,
+            shadowRadius: 2,
+            elevation: 2,
+          }}
+        >
+          <MaterialIcons name="person" size={24} color={colors.primary} />
+        </Pressable>
+
+        {/* Status Bar */}
+        <View
+          style={{
+            backgroundColor: colors.bg_accent,
+            paddingVertical: 8,
+            paddingHorizontal: 12,
+            borderRadius: 20,
+            borderWidth: 1,
+            borderColor: colors.border,
+            flexDirection: "row",
+            justifyContent: "space-between",
+            alignItems: "center",
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.1,
+            shadowRadius: 2,
+            elevation: 2,
+            flex: 1,
+            marginLeft: 12,
+            maxWidth: 250,
+          }}
+        >
+          <View>
+            <Text style={{ color: colors.text, fontWeight: "600" }}>
+              Status: {getStatusText()}
+            </Text>
+            {updatingLocation && (
+              <Text style={{ color: colors.textSecondary, fontSize: 10 }}>
+                Updating location...
+              </Text>
+            )}
+          </View>
+          <View style={{ flexDirection: "row", alignItems: "center", marginLeft: 8 }}>
+            <View
+              style={{
+                width: 8,
+                height: 8,
+                backgroundColor:
+                  rideStatus.phase === "idle" ? colors.primary : "#fbbf24",
+                borderRadius: 4,
+                marginRight: 4,
+              }}
+            />
+            <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+              {rideStatus.phase === "idle" ? "Available" : "In Ride"}
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Current Ride Panel */}
       {rideStatus.phase !== "idle" && currentRideDetails && (
         <View
           style={{
             position: "absolute",
-            bottom: 16,
-            left: 16,
-            right: 16,
-            backgroundColor: colors.bg_accent,
-            padding: 16,
-            borderRadius: 12,
-            borderWidth: 1,
-            borderColor: colors.border,
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.2,
-            shadowRadius: 4,
-            elevation: 3,
+            bottom: 0,
+            left: 0,
+            right: 0,
+            backgroundColor: colors.background,
+            borderTopLeftRadius: 24,
+            borderTopRightRadius: 24,
+            shadowColor: colors.text,
+            shadowOffset: { width: 0, height: -4 },
+            shadowOpacity: 0.1,
+            shadowRadius: 12,
+            elevation: 10,
+            paddingHorizontal: 20,
+            paddingTop: 20,
+            paddingBottom: 40,
           }}
         >
           <Text
             style={{
               color: colors.text,
-              fontSize: 18,
-              fontWeight: "bold",
-              marginBottom: 8,
+              fontSize: 20,
+              fontWeight: "700",
+              marginBottom: 16,
             }}
           >
-            Current Ride - {getStatusText()}
+            Current Ride
           </Text>
+          {/* Ride Info Card */}
+          <View
+            style={{
+              backgroundColor: colors.bg_accent,
+              borderRadius: 16,
+              padding: 20,
+              marginBottom: 20,
+              borderWidth: 1,
+              borderColor: colors.border,
+            }}
+          >
+            <View style={{ 
+              flexDirection: "row", 
+              alignItems: "center", 
+              marginBottom: 16 
+            }}>
+              <View
+                style={{
+                  backgroundColor: colors.primary,
+                  padding: 12,
+                  borderRadius: 50,
+                  marginRight: 16,
+                }}
+              >
+                <Text style={{ fontSize: 20 }}>
+                  {getRideTypeIcon(currentRideDetails.rideType)}
+                </Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={{
+                    color: colors.text,
+                    fontSize: 18,
+                    fontWeight: "600",
+                  }}
+                >
+                  {getRideTypeName(currentRideDetails.rideType)} Ride
+                </Text>
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: 14,
+                    marginTop: 2,
+                  }}
+                >
+                  {getStatusText()}
+                </Text>
+              </View>
+              <Text
+                style={{
+                  color: colors.primary,
+                  fontWeight: "700",
+                  fontSize: 18,
+                }}
+              >
+                PKR {currentRideDetails.fare ? Math.ceil(currentRideDetails.fare) : "--"}
+              </Text>
+            </View>
 
-          <View style={{ marginBottom: 12 }}>
-            <Text style={{ color: colors.textSecondary, marginBottom: 2 }}>
-              Ride Type: {currentRideDetails.rideType.toUpperCase()}
-            </Text>
-            <Text style={{ color: colors.text }}>
-              Destination: {getDestinationAddress(currentRideDetails)}
-            </Text>
-            <Text style={{ color: colors.textSecondary, marginTop: 4 }}>
-              Distance: {currentRideDetails.distance?.toFixed(1) || "--"} km
-            </Text>
-            <Text style={{ color: colors.textSecondary }}>
-              Estimated Time: {currentRideDetails.estimatedTime || "--"}
-            </Text>
-            <Text
-              style={{
-                color: colors.primary,
-                fontWeight: "bold",
-                marginTop: 4,
-              }}
-            >
-              Fare:{" "}
-              {currentRideDetails.fare
-                ? Math.ceil(currentRideDetails.fare)
-                : "--"}{" "}
-              PKR
-            </Text>
+            {/* Trip Details */}
+            <View style={{ gap: 12 }}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                  <View
+                    style={{
+                      backgroundColor: colors.primary,
+                      padding: 6,
+                      borderRadius: 50,
+                      marginRight: 12,
+                    }}
+                  >
+                    <Feather name="navigation" size={12} color={colors.background} />
+                  </View>
+                  <Text style={{ color: colors.textSecondary, fontSize: 14 }}>
+                    Distance
+                  </Text>
+                </View>
+                <Text style={{ color: colors.text, fontWeight: "600" }}>
+                  {currentRideDetails.distance?.toFixed(1) || "--"} km
+                </Text>
+              </View>
+
+              <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                  <View
+                    style={{
+                      backgroundColor: colors.primary,
+                      padding: 6,
+                      borderRadius: 50,
+                      marginRight: 12,
+                    }}
+                  >
+                    <Feather name="clock" size={12} color={colors.background} />
+                  </View>
+                  <Text style={{ color: colors.textSecondary, fontSize: 14 }}>
+                    Estimated Time
+                  </Text>
+                </View>
+                <Text style={{ color: colors.text, fontWeight: "600" }}>
+                  {currentRideDetails.estimatedTime || "--"}
+                </Text>
+              </View>
+
+              <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                  <View
+                    style={{
+                      backgroundColor: colors.primary,
+                      padding: 6,
+                      borderRadius: 50,
+                      marginRight: 12,
+                    }}
+                  >
+                    <Feather name="map-pin" size={12} color={colors.background} />
+                  </View>
+                  <Text style={{ color: colors.textSecondary, fontSize: 14 }}>
+                    Destination
+                  </Text>
+                </View>
+                <Text 
+                  style={{ 
+                    color: colors.text, 
+                    fontWeight: "600",
+                    flex: 1,
+                    textAlign: "right",
+                    marginLeft: 8
+                  }}
+                  numberOfLines={1}
+                >
+                  {getDestinationAddress(currentRideDetails)}
+                </Text>
+              </View>
+            </View>
           </View>
 
+          {/* Action Buttons */}
           <View style={{ flexDirection: "row", gap: 12 }}>
-            <Pressable
+            <TouchableOpacity
               onPress={openNavigation}
               style={{
                 flex: 1,
                 backgroundColor: colors.primary,
-                padding: 12,
-                borderRadius: 8,
+                padding: 16,
+                borderRadius: 16,
                 alignItems: "center",
                 justifyContent: "center",
                 flexDirection: "row",
                 gap: 8,
               }}
             >
-              <MaterialIcons name="navigation" size={20} color="white" />
-              <Text style={{ color: "white", fontWeight: "600" }}>
+              <MaterialIcons name="navigation" size={20} color={colors.background} />
+              <Text style={{ 
+                color: colors.background, 
+                fontWeight: "600",
+                fontSize: 16
+              }}>
                 Navigate
               </Text>
-            </Pressable>
+            </TouchableOpacity>
 
-            <Pressable
+            <TouchableOpacity
               onPress={handleRideAction}
               disabled={loading}
               style={{
                 flex: 1,
-                backgroundColor: colors.secondary,
-                padding: 12,
-                borderRadius: 8,
+                backgroundColor: "#10B981",
+                padding: 16,
+                borderRadius: 16,
                 alignItems: "center",
                 justifyContent: "center",
                 opacity: loading ? 0.7 : 1,
@@ -573,297 +854,326 @@ export default function DriverHomeScreen() {
               }}
             >
               {loading ? (
-                <ActivityIndicator color="white" />
+                <ActivityIndicator color={colors.background} />
               ) : (
                 <>
                   <MaterialIcons
-                    name="directions-car"
+                    name="check-circle"
                     size={20}
-                    color="white"
+                    color={colors.background}
                   />
-                  <Text style={{ color: "white", fontWeight: "600" }}>
+                  <Text style={{ 
+                    color: colors.background, 
+                    fontWeight: "600",
+                    fontSize: 16
+                  }}>
                     {getActionButtonText()}
                   </Text>
                 </>
               )}
-            </Pressable>
+            </TouchableOpacity>
           </View>
         </View>
       )}
 
+      {/* Available Rides Panel */}
       {rideStatus.phase === "idle" && (
         <View
           style={{
             position: "absolute",
-            bottom: 16,
-            left: 16,
-            right: 16,
-            backgroundColor: colors.bg_accent,
-            padding: 16,
-            borderRadius: 12,
-            borderWidth: 1,
-            borderColor: colors.border,
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.2,
-            shadowRadius: 4,
-            elevation: 3,
+            bottom: 0,
+            left: 0,
+            right: 0,
+            backgroundColor: colors.background,
+            borderTopLeftRadius: 24,
+            borderTopRightRadius: 24,
+            shadowColor: colors.text,
+            shadowOffset: { width: 0, height: -4 },
+            shadowOpacity: 0.1,
+            shadowRadius: 12,
+            elevation: 10,
+            maxHeight: height * 0.5,
           }}
         >
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: 12,
-            }}
-          >
-            <Text
+          {/* Drag Handle */}
+          <View style={{ alignItems: "center", paddingVertical: 12 }}>
+            <View
               style={{
-                color: colors.text,
-                fontSize: 18,
-                fontWeight: "bold",
+                width: 40,
+                height: 4,
+                backgroundColor: colors.border,
+                borderRadius: 2,
               }}
-            >
-              Nearby Ride Requests
-            </Text>
-            <Text style={{ color: colors.textSecondary }}>
-              {rideRequests.length} available
-            </Text>
+            />
           </View>
 
-          {rideRequests.length === 0 ? (
-            <View style={{ paddingVertical: 16, alignItems: "center" }}>
-              <MaterialIcons
-                name="search-off"
-                size={40}
-                color={colors.textSecondary}
-              />
+          <View style={{ paddingHorizontal: 20 }}>
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 20,
+              }}
+            >
               <Text
                 style={{
-                  color: colors.textSecondary,
-                  textAlign: "center",
-                  marginTop: 8,
+                  color: colors.text,
+                  fontSize: 20,
+                  fontWeight: "700",
                 }}
               >
-                No ride requests within 6km radius
+                Ride Requests
               </Text>
+              <View
+                style={{
+                  backgroundColor: colors.primary,
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
+                  borderRadius: 20,
+                }}
+              >
+                <Text style={{ 
+                  color: colors.background, 
+                  fontWeight: "600",
+                  fontSize: 12
+                }}>
+                  {rideRequests.length} nearby
+                </Text>
+              </View>
             </View>
-          ) : (
-            <ScrollView
-              style={{ maxHeight: 200 }}
-              showsVerticalScrollIndicator={false}
-            >
-              {rideRequests.map((request) => (
+
+            {rideRequests.length === 0 ? (
+              <View style={{ 
+                paddingVertical: 40, 
+                alignItems: "center",
+                marginBottom: 40
+              }}>
                 <View
-                  key={request.id}
                   style={{
-                    marginBottom: 12,
-                    padding: 12,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    borderRadius: 8,
-                    backgroundColor: colors.background,
+                    backgroundColor: colors.bg_accent,
+                    padding: 20,
+                    borderRadius: 50,
+                    marginBottom: 16,
+                  }}
+                >
+                  <Feather
+                    name="search"
+                    size={32}
+                    color={colors.textSecondary}
+                  />
+                </View>
+                <Text
+                  style={{
+                    color: colors.text,
+                    fontSize: 18,
+                    fontWeight: "600",
+                    marginBottom: 8,
+                  }}
+                >
+                  No ride requests
+                </Text>
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    textAlign: "center",
+                    fontSize: 14,
+                  }}
+                >
+                  Waiting for ride requests within 6km radius
+                </Text>
+              </View>
+            ) : (
+              <>
+                <ScrollView
+                  style={{ maxHeight: 280 }}
+                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={{ paddingBottom: 20 }}
+                >
+                  {rideRequests.map((request) => (
+                    <View
+                      key={request.id}
+                      style={{
+                        marginBottom: 16,
+                        backgroundColor: colors.bg_accent,
+                        borderRadius: 16,
+                        padding: 20,
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                      }}
+                    >
+                      {/* Ride Header */}
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          marginBottom: 16,
+                        }}
+                      >
+                        <View
+                          style={{
+                            backgroundColor: colors.primary,
+                            padding: 12,
+                            borderRadius: 50,
+                            marginRight: 16,
+                          }}
+                        >
+                          <Text style={{ fontSize: 20 }}>
+                            {getRideTypeIcon(request.rideType)}
+                          </Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text
+                            style={{
+                              color: colors.text,
+                              fontWeight: "600",
+                              fontSize: 16,
+                            }}
+                          >
+                            {getRideTypeName(request.rideType)} Ride
+                          </Text>
+                          <Text
+                            style={{
+                              color: colors.textSecondary,
+                              fontSize: 14,
+                              marginTop: 2,
+                            }}
+                          >
+                            {(request.distance || 0).toFixed(1)} km away
+                          </Text>
+                        </View>
+                        <Text
+                          style={{
+                            color: colors.primary,
+                            fontWeight: "700",
+                            fontSize: 16,
+                          }}
+                        >
+                          PKR {request.fare ? Math.ceil(request.fare) : "--"}
+                        </Text>
+                      </View>
+
+                      {/* Trip Details */}
+                      <View style={{ gap: 8, marginBottom: 16 }}>
+                        <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                          <View style={{ flexDirection: "row", alignItems: "center" }}>
+                            <View
+                              style={{
+                                backgroundColor: colors.primary,
+                                padding: 4,
+                                borderRadius: 50,
+                                marginRight: 8,
+                              }}
+                            >
+                              <Feather name="clock" size={10} color={colors.background} />
+                            </View>
+                            <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                              Est. Time
+                            </Text>
+                          </View>
+                          <Text style={{ color: colors.text, fontWeight: "600", fontSize: 12 }}>
+                            {request.estimatedTime || "--"}
+                          </Text>
+                        </View>
+
+                        <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                          <View style={{ flexDirection: "row", alignItems: "center" }}>
+                            <View
+                              style={{
+                                backgroundColor: colors.primary,
+                                padding: 4,
+                                borderRadius: 50,
+                                marginRight: 8,
+                              }}
+                            >
+                              <Feather name="map-pin" size={10} color={colors.background} />
+                            </View>
+                            <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                              Destination
+                            </Text>
+                          </View>
+                          <Text 
+                            style={{ 
+                              color: colors.text, 
+                              fontWeight: "600", 
+                              fontSize: 12,
+                              flex: 1,
+                              textAlign: "right",
+                              marginLeft: 8
+                            }}
+                            numberOfLines={1}
+                          >
+                            {getDestinationAddress(request)}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Accept Button */}
+                      <TouchableOpacity
+                        onPress={() => acceptRide(request.id)}
+                        disabled={loading}
+                        style={{
+                          backgroundColor: colors.primary,
+                          padding: 14,
+                          borderRadius: 12,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flexDirection: "row",
+                          gap: 8,
+                          opacity: loading ? 0.7 : 1,
+                        }}
+                      >
+                        {loading ? (
+                          <ActivityIndicator color={colors.background} />
+                        ) : (
+                          <>
+                            <MaterialIcons
+                              name="check-circle"
+                              size={20}
+                              color={colors.background}
+                            />
+                            <Text style={{ 
+                              color: colors.background, 
+                              fontWeight: "600",
+                              fontSize: 16
+                            }}>
+                              Accept Ride
+                            </Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </ScrollView>
+
+                {/* Radius Indicator */}
+                <View
+                  style={{ 
+                    marginTop: 8, 
+                    flexDirection: "row", 
+                    alignItems: "center",
+                    justifyContent: "center",
+                    paddingBottom: 20
                   }}
                 >
                   <View
                     style={{
-                      flexDirection: "row",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      marginBottom: 4,
-                    }}
-                  >
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 8,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          fontSize: 20,
-                          transform: [{ translateY: 2 }],
-                        }}
-                      >
-                        {request.rideType === "bike"
-                          ? "🚲"
-                          : request.rideType === "car"
-                            ? "🚗"
-                            : request.rideType === "car_plus"
-                              ? "🚙"
-                              : "🏎️"}
-                      </Text>
-                      <Text style={{ color: colors.text, fontWeight: "600" }}>
-                        {request.rideType === "bike"
-                          ? "Bike"
-                          : request.rideType === "car"
-                            ? "Standard Car"
-                            : request.rideType === "car_plus"
-                              ? "Car Plus"
-                              : "Premium"}{" "}
-                        Ride
-                      </Text>
-                    </View>
-                    <Text style={{ color: colors.primary, fontWeight: "600" }}>
-                      {request.distance.toFixed(1)} km
-                    </Text>
-                  </View>
-
-                  <Text
-                    style={{
-                      color: colors.textSecondary,
-                      marginBottom: 8,
-                      fontSize: 12,
-                    }}
-                  >
-                    To: {getDestinationAddress(request)}
-                  </Text>
-
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      justifyContent: "space-between",
-                    }}
-                  >
-                    <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                      Est. Time: {request.estimatedTime}
-                    </Text>
-                    <Text
-                      style={{
-                        color: colors.primary,
-                        fontWeight: "bold",
-                        fontSize: 12,
-                      }}
-                    >
-                      Fare:
-                      {request.fare ? Math.ceil(request.fare) : "--"} PKR
-                    </Text>
-                  </View>
-
-                  <Pressable
-                    onPress={() => acceptRide(request.id)}
-                    disabled={loading}
-                    style={{
+                      width: 12,
+                      height: 12,
                       backgroundColor: colors.primary,
-                      padding: 10,
                       borderRadius: 6,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexDirection: "row",
-                      gap: 8,
-                      opacity: loading ? 0.7 : 1,
-                      marginTop: 8,
+                      marginRight: 8,
                     }}
-                  >
-                    {loading ? (
-                      <ActivityIndicator color="white" />
-                    ) : (
-                      <>
-                        <MaterialIcons
-                          name="check-circle"
-                          size={18}
-                          color="white"
-                        />
-                        <Text style={{ color: "white", fontWeight: "600" }}>
-                          Accept Ride
-                        </Text>
-                      </>
-                    )}
-                  </Pressable>
+                  />
+                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                    Showing rides within 6km radius
+                  </Text>
                 </View>
-              ))}
-            </ScrollView>
-          )}
-
-          <View
-            style={{ marginTop: 8, flexDirection: "row", alignItems: "center" }}
-          >
-            <View
-              style={{
-                width: 12,
-                height: 12,
-                backgroundColor: colors.primary,
-                borderRadius: 6,
-                marginRight: 8,
-              }}
-            />
-            <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-              Showing rides within 6km radius
-            </Text>
+              </>
+            )}
           </View>
         </View>
       )}
-
-      <View
-        style={{
-          position: "absolute",
-          top: 60,
-          left: 16,
-          right: 16,
-          backgroundColor: colors.bg_accent,
-          padding: 12,
-          borderRadius: 8,
-          borderWidth: 1,
-          borderColor: colors.border,
-          flexDirection: "row",
-          justifyContent: "space-between",
-          alignItems: "center",
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 1 },
-          shadowOpacity: 0.1,
-          shadowRadius: 2,
-          elevation: 2,
-        }}
-      >
-        <View>
-          <Text style={{ color: colors.text, fontWeight: "600" }}>
-            Status: {getStatusText()}
-          </Text>
-          {updatingLocation && (
-            <Text style={{ color: colors.textSecondary, fontSize: 10 }}>
-              Updating location...
-            </Text>
-          )}
-        </View>
-        <View style={{ flexDirection: "row", alignItems: "center" }}>
-          <View
-            style={{
-              width: 8,
-              height: 8,
-              backgroundColor:
-                rideStatus.phase === "idle" ? colors.primary : "#fbbf24",
-              borderRadius: 4,
-              marginRight: 4,
-            }}
-          />
-          <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-            {rideStatus.phase === "idle" ? "Available" : "In Ride"}
-          </Text>
-        </View>
-      </View>
-
-      <Pressable
-        onPress={() => router.push("/(driver)/profile")}
-        style={{
-          position: "absolute",
-          top: 16,
-          left: 16,
-          backgroundColor: colors.bg_accent,
-          padding: 8,
-          borderRadius: 20,
-          borderWidth: 1,
-          borderColor: colors.border,
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 1 },
-          shadowOpacity: 0.1,
-          shadowRadius: 2,
-          elevation: 2,
-        }}
-      >
-        <MaterialIcons name="person" size={24} color={colors.primary} />
-      </Pressable>
     </View>
   );
 }

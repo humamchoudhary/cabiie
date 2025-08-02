@@ -6,12 +6,14 @@ import {
   Pressable,
   ActivityIndicator,
   Alert,
+  TouchableOpacity,
 } from "react-native";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "expo-router";
 import { doc, getDoc } from "firebase/firestore";
 import { firestore } from "@/config/firebase";
 import { colors } from "@/utils/colors";
+import { MaterialIcons, AntDesign, Feather } from "@expo/vector-icons";
 
 export default function ProfileScreen() {
   const { user, signOut } = useAuth();
@@ -58,76 +60,369 @@ export default function ProfileScreen() {
   }
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: colors.background, padding: 24 }}
-    >
-      <Text
-        style={{
-          fontSize: 24,
-          color: colors.primary,
-          fontWeight: "bold",
-          marginBottom: 16,
-        }}
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: 40 }}
+        showsVerticalScrollIndicator={false}
       >
-        Driver Profile
-      </Text>
+        {/* Profile Header */}
+        <View
+          style={{
+            backgroundColor: colors.bg_accent,
+            padding: 24,
+            borderBottomLeftRadius: 24,
+            borderBottomRightRadius: 24,
+            marginBottom: 20,
+            shadowColor: colors.text,
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.1,
+            shadowRadius: 8,
+            elevation: 5,
+          }}
+        >
+          <View style={{ alignItems: "center", marginBottom: 20 }}>
+            <View
+              style={{
+                width: 100,
+                height: 100,
+                borderRadius: 50,
+                backgroundColor: colors.primary,
+                alignItems: "center",
+                justifyContent: "center",
+                marginBottom: 16,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 36,
+                  fontWeight: "600",
+                  color: colors.background,
+                }}
+              >
+                {profile?.name?.charAt(0).toUpperCase() || "D"}
+              </Text>
+            </View>
+            <Text
+              style={{
+                fontSize: 24,
+                fontWeight: "700",
+                color: colors.text,
+                marginBottom: 4,
+              }}
+            >
+              {profile?.name || "Driver"}
+            </Text>
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <AntDesign name="star" size={16} color="#FCD34D" />
+              <Text
+                style={{
+                  fontSize: 16,
+                  color: colors.textSecondary,
+                  marginLeft: 4,
+                }}
+              >
+                {profile?.rating || "5.0"}
+              </Text>
+            </View>
+          </View>
+        </View>
 
-      <Text style={{ color: colors.text, marginBottom: 8 }}>Name:</Text>
-      <Text style={{ color: "#fff", marginBottom: 16 }}>
-        {profile?.name || "N/A"}
-      </Text>
+        {/* Profile Details */}
+        <View style={{ paddingHorizontal: 20 }}>
+          {/* Driver Status Card */}
+          <View
+            style={{
+              backgroundColor: colors.bg_accent,
+              borderRadius: 16,
+              padding: 20,
+              marginBottom: 20,
+              borderWidth: 1,
+              borderColor: colors.border,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 18,
+                fontWeight: "600",
+                color: colors.text,
+                marginBottom: 16,
+              }}
+            >
+              Driver Information
+            </Text>
 
-      <Text style={{ color: colors.text, marginBottom: 8 }}>User Type:</Text>
-      <Text style={{ color: "#fff", marginBottom: 16 }}>
-        {profile?.userType || "N/A"}
-      </Text>
+            <View style={{ gap: 16 }}>
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <View
+                  style={{
+                    backgroundColor: colors.primary,
+                    padding: 8,
+                    borderRadius: 50,
+                    marginRight: 12,
+                  }}
+                >
+                  <MaterialIcons
+                    name="person"
+                    size={16}
+                    color={colors.background}
+                  />
+                </View>
+                <View>
+                  <Text style={{ fontSize: 12, color: colors.textSecondary }}>
+                    User Type
+                  </Text>
+                  <Text
+                    style={{ fontSize: 16, fontWeight: "600", color: colors.text }}
+                  >
+                    {profile?.userType || "Driver"}
+                  </Text>
+                </View>
+              </View>
 
-      <Text style={{ color: colors.text, marginBottom: 8 }}>Rating:</Text>
-      <Text style={{ color: "#fff", marginBottom: 16 }}>
-        {profile?.rating || "N/A"}
-      </Text>
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <View
+                  style={{
+                    backgroundColor: colors.primary,
+                    padding: 8,
+                    borderRadius: 50,
+                    marginRight: 12,
+                  }}
+                >
+                  <MaterialIcons
+                    name="verified"
+                    size={16}
+                    color={colors.background}
+                  />
+                </View>
+                <View>
+                  <Text style={{ fontSize: 12, color: colors.textSecondary }}>
+                    Account Status
+                  </Text>
+                  <Text
+                    style={{ fontSize: 16, fontWeight: "600", color: colors.text }}
+                  >
+                    {profile?.status || "Active"}
+                  </Text>
+                </View>
+              </View>
 
-      <Text style={{ color: colors.text, marginBottom: 8 }}>Status:</Text>
-      <Text style={{ color: "#fff", marginBottom: 16 }}>
-        {profile?.status || "N/A"}
-      </Text>
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <View
+                  style={{
+                    backgroundColor: colors.primary,
+                    padding: 8,
+                    borderRadius: 50,
+                    marginRight: 12,
+                  }}
+                >
+                  <AntDesign name="star" size={16} color={colors.background} />
+                </View>
+                <View>
+                  <Text style={{ fontSize: 12, color: colors.textSecondary }}>
+                    Rating
+                  </Text>
+                  <Text
+                    style={{ fontSize: 16, fontWeight: "600", color: colors.text }}
+                  >
+                    {profile?.rating || "5.0"}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </View>
 
-      <Text style={{ color: colors.text, marginBottom: 8 }}>Vehicle Info:</Text>
-      <Text style={{ color: "#fff", marginBottom: 4 }}>
-        License Plate: {profile?.vehicleInfo?.licensePlate || "N/A"}
-      </Text>
-      <Text style={{ color: "#fff", marginBottom: 4 }}>
-        Model: {profile?.vehicleInfo?.model || "N/A"}
-      </Text>
-      <Text style={{ color: "#fff", marginBottom: 16 }}>
-        Type: {profile?.vehicleInfo?.type || "N/A"}
-      </Text>
+          {/* Vehicle Information Card */}
+          <View
+            style={{
+              backgroundColor: colors.bg_accent,
+              borderRadius: 16,
+              padding: 20,
+              marginBottom: 20,
+              borderWidth: 1,
+              borderColor: colors.border,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 18,
+                fontWeight: "600",
+                color: colors.text,
+                marginBottom: 16,
+              }}
+            >
+              Vehicle Information
+            </Text>
 
-      <Pressable
-        onPress={() => router.push("/edit")}
-        style={{
-          backgroundColor: colors.primary,
-          padding: 16,
-          borderRadius: 8,
-          alignItems: "center",
-          marginBottom: 16,
-        }}
-      >
-        <Text style={{ color: "#fff", fontWeight: "600" }}>Edit Profile</Text>
-      </Pressable>
+            <View style={{ gap: 16 }}>
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <View
+                  style={{
+                    backgroundColor: colors.primary,
+                    padding: 8,
+                    borderRadius: 50,
+                    marginRight: 12,
+                  }}
+                >
+                  <MaterialIcons
+                    name="directions-car"
+                    size={16}
+                    color={colors.background}
+                  />
+                </View>
+                <View>
+                  <Text style={{ fontSize: 12, color: colors.textSecondary }}>
+                    Vehicle Type
+                  </Text>
+                  <Text
+                    style={{ fontSize: 16, fontWeight: "600", color: colors.text }}
+                  >
+                    {profile?.vehicleInfo?.type || "N/A"}
+                  </Text>
+                </View>
+              </View>
 
-      <Pressable
-        onPress={signOut}
-        style={{
-          backgroundColor: "#d9534f",
-          padding: 16,
-          borderRadius: 8,
-          alignItems: "center",
-          marginTop: 16,
-        }}
-      >
-        <Text style={{ color: "#fff", fontWeight: "600" }}>Logout</Text>
-      </Pressable>
-    </ScrollView>
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <View
+                  style={{
+                    backgroundColor: colors.primary,
+                    padding: 8,
+                    borderRadius: 50,
+                    marginRight: 12,
+                  }}
+                >
+                  <MaterialIcons
+                    name="badge"
+                    size={16}
+                    color={colors.background}
+                  />
+                </View>
+                <View>
+                  <Text style={{ fontSize: 12, color: colors.textSecondary }}>
+                    License Plate
+                  </Text>
+                  <Text
+                    style={{ fontSize: 16, fontWeight: "600", color: colors.text }}
+                  >
+                    {profile?.vehicleInfo?.licensePlate || "N/A"}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <View
+                  style={{
+                    backgroundColor: colors.primary,
+                    padding: 8,
+                    borderRadius: 50,
+                    marginRight: 12,
+                  }}
+                >
+                  <Feather name="box" size={16} color={colors.background} />
+                </View>
+                <View>
+                  <Text style={{ fontSize: 12, color: colors.textSecondary }}>
+                    Vehicle Model
+                  </Text>
+                  <Text
+                    style={{ fontSize: 16, fontWeight: "600", color: colors.text }}
+                  >
+                    {profile?.vehicleInfo?.model || "N/A"}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </View>
+
+          {/* Stats Card */}
+          <View
+            style={{
+              flexDirection: "row",
+              backgroundColor: colors.bg_accent,
+              borderRadius: 16,
+              padding: 20,
+              marginBottom: 20,
+              borderWidth: 1,
+              borderColor: colors.border,
+            }}
+          >
+            <View style={{ flex: 1, alignItems: "center" }}>
+              <View
+                style={{
+                  backgroundColor: colors.primary,
+                  padding: 8,
+                  borderRadius: 50,
+                  marginBottom: 8,
+                }}
+              >
+                <Feather name="dollar-sign" size={16} color={colors.background} />
+              </View>
+              <Text
+                style={{
+                  fontSize: 16,
+                  fontWeight: "700",
+                  color: colors.text,
+                  marginBottom: 4,
+                }}
+              >
+                {profile?.totalEarnings ? `PKR ${profile.totalEarnings.toFixed(2)}` : "PKR 0.00"}
+              </Text>
+              <Text style={{ fontSize: 12, color: colors.textSecondary }}>
+                Total Earnings
+              </Text>
+            </View>
+            <View style={{ flex: 1, alignItems: "center" }}>
+              <View
+                style={{
+                  backgroundColor: colors.primary,
+                  padding: 8,
+                  borderRadius: 50,
+                  marginBottom: 8,
+                }}
+              >
+                <Feather name="check-circle" size={16} color={colors.background} />
+              </View>
+              <Text
+                style={{
+                  fontSize: 16,
+                  fontWeight: "700",
+                  color: colors.text,
+                  marginBottom: 4,
+                }}
+              >
+                {profile?.completedRides || 0}
+              </Text>
+              <Text style={{ fontSize: 12, color: colors.textSecondary }}>
+                Completed Rides
+              </Text>
+            </View>
+          </View>
+
+          {/* Logout Button */}
+          <TouchableOpacity
+            onPress={signOut}
+            style={{
+              backgroundColor: "#d9534f",
+              padding: 16,
+              borderRadius: 12,
+              alignItems: "center",
+              flexDirection: "row",
+              justifyContent: "center",
+            }}
+          >
+            <MaterialIcons name="logout" size={20} color={colors.background} />
+            <Text
+              style={{
+                color: colors.background,
+                fontWeight: "600",
+                fontSize: 16,
+                marginLeft: 8,
+              }}
+            >
+              Logout
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </View>
   );
 }
