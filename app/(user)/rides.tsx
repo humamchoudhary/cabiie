@@ -7,7 +7,9 @@ import {
   Pressable,
   ActivityIndicator,
   RefreshControl,
-  Image,
+  StyleSheet,
+  SafeAreaView,
+  StatusBar,
 } from "react-native";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "expo-router";
@@ -20,7 +22,13 @@ import {
 } from "firebase/firestore";
 import { firestore } from "@/config/firebase";
 import { colors } from "@/utils/colors";
-import { MaterialIcons, AntDesign, Feather } from "@expo/vector-icons";
+import {
+  MaterialIcons,
+  AntDesign,
+  Feather,
+  Ionicons,
+  FontAwesome5,
+} from "@expo/vector-icons";
 
 interface Ride {
   id: string;
@@ -135,15 +143,15 @@ export default function RidesScreen() {
   const getRideTypeIcon = (rideType: string) => {
     switch (rideType) {
       case "bike":
-        return "🚲";
+        return { icon: "motorcycle", lib: FontAwesome5 };
       case "car":
-        return "🚗";
+        return { icon: "car", lib: FontAwesome5 };
       case "car_plus":
-        return "🚙";
+        return { icon: "car-sport", lib: Ionicons };
       case "premium":
-        return "🏎️";
+        return { icon: "car", lib: Ionicons };
       default:
-        return "🚗";
+        return { icon: "car", lib: FontAwesome5 };
     }
   };
 
@@ -165,106 +173,53 @@ export default function RidesScreen() {
   };
 
   const handleRidePress = (ride: Ride) => {
-    // If ride is active, navigate to ride status
     if (
       ["searching", "accepted", "arrived", "in_progress"].includes(ride.status)
     ) {
       router.push(`/(user)/ride-status?rideId=${ride.id}`);
     }
-    // For completed/cancelled rides, you could show a detail view
-    // router.push(`/(user)/ride-details?rideId=${ride.id}`);
   };
 
   const filteredRides = getFilteredRides();
 
   if (loading) {
     return (
-      <View
-        style={{
-          flex: 1,
-          justifyContent: "center",
-          alignItems: "center",
-          backgroundColor: colors.background,
-        }}
-      >
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={{ color: colors.text, marginTop: 16 }}>
-          Loading your rides...
-        </Text>
-      </View>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Loading your rides...</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
+
       {/* Header */}
-      <View
-        style={{
-          paddingTop: 60,
-          paddingHorizontal: 16,
-          paddingBottom: 16,
-          backgroundColor: colors.bg_accent,
-          borderBottomWidth: 1,
-          borderBottomColor: colors.border,
-        }}
-      >
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            marginBottom: 16,
-          }}
-        >
-          <Pressable
-            onPress={() => router.back()}
-            style={{
-              padding: 8,
-              marginRight: 12,
-            }}
-          >
+      <View style={styles.header}>
+        <View style={styles.headerTop}>
+          <Pressable onPress={() => router.back()} style={styles.backButton}>
             <AntDesign name="arrowleft" size={24} color={colors.text} />
           </Pressable>
-          <Text
-            style={{
-              fontSize: 20,
-              fontWeight: "bold",
-              color: colors.text,
-              flex: 1,
-            }}
-          >
-            My Rides
-          </Text>
+          <Text style={styles.headerTitle}>My Rides</Text>
+          <View style={styles.headerPlaceholder} />
         </View>
 
         {/* Tab Navigation */}
-        <View
-          style={{
-            flexDirection: "row",
-            backgroundColor: colors.background,
-            borderRadius: 8,
-            padding: 4,
-          }}
-        >
+        <View style={styles.tabContainer}>
           {["all", "active", "completed"].map((tab) => (
             <Pressable
               key={tab}
               onPress={() => setActiveTab(tab as any)}
-              style={{
-                flex: 1,
-                paddingVertical: 8,
-                paddingHorizontal: 12,
-                borderRadius: 6,
-                backgroundColor:
-                  activeTab === tab ? colors.primary : "transparent",
-                alignItems: "center",
-              }}
+              style={[styles.tab, activeTab === tab && styles.tabActive]}
             >
               <Text
-                style={{
-                  color: activeTab === tab ? colors.background : colors.text,
-                  fontWeight: activeTab === tab ? "600" : "400",
-                  textTransform: "capitalize",
-                }}
+                style={[
+                  styles.tabText,
+                  activeTab === tab && styles.tabTextActive,
+                ]}
               >
                 {tab} (
                 {tab === "all"
@@ -290,7 +245,7 @@ export default function RidesScreen() {
 
       {/* Rides List */}
       <ScrollView
-        style={{ flex: 1 }}
+        style={styles.content}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -302,37 +257,18 @@ export default function RidesScreen() {
         showsVerticalScrollIndicator={false}
       >
         {filteredRides.length === 0 ? (
-          <View
-            style={{
-              flex: 1,
-              justifyContent: "center",
-              alignItems: "center",
-              paddingVertical: 80,
-            }}
-          >
-            <MaterialIcons
-              name="directions-car"
-              size={64}
-              color={colors.textSecondary}
-            />
-            <Text
-              style={{
-                color: colors.textSecondary,
-                fontSize: 18,
-                fontWeight: "600",
-                marginTop: 16,
-                marginBottom: 8,
-              }}
-            >
+          <View style={styles.emptyStateContainer}>
+            <View style={styles.emptyStateIcon}>
+              <MaterialIcons
+                name="directions-car"
+                size={48}
+                color={colors.textSecondary}
+              />
+            </View>
+            <Text style={styles.emptyStateTitle}>
               No {activeTab === "all" ? "" : activeTab} rides
             </Text>
-            <Text
-              style={{
-                color: colors.textSecondary,
-                textAlign: "center",
-                paddingHorizontal: 32,
-              }}
-            >
+            <Text style={styles.emptyStateDescription}>
               {activeTab === "active"
                 ? "You don't have any active rides at the moment"
                 : activeTab === "completed"
@@ -342,202 +278,348 @@ export default function RidesScreen() {
             {activeTab === "all" && (
               <Pressable
                 onPress={() => router.push("/(user)/home")}
-                style={{
-                  backgroundColor: colors.primary,
-                  paddingHorizontal: 24,
-                  paddingVertical: 12,
-                  borderRadius: 25,
-                  marginTop: 20,
-                }}
+                style={styles.bookRideButton}
               >
-                <Text
-                  style={{
-                    color: colors.background,
-                    fontWeight: "600",
-                  }}
-                >
-                  Book a Ride
-                </Text>
+                <Ionicons name="add" size={20} color={colors.background} />
+                <Text style={styles.bookRideButtonText}>Book a Ride</Text>
               </Pressable>
             )}
           </View>
         ) : (
-          <View style={{ padding: 16 }}>
-            {filteredRides.map((ride) => (
-              <Pressable
-                key={ride.id}
-                onPress={() => handleRidePress(ride)}
-                style={{
-                  backgroundColor: colors.bg_accent,
-                  borderRadius: 12,
-                  padding: 16,
-                  marginBottom: 12,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  shadowColor: "#000",
-                  shadowOffset: { width: 0, height: 1 },
-                  shadowOpacity: 0.1,
-                  shadowRadius: 2,
-                  elevation: 2,
-                }}
-              >
-                {/* Header */}
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    marginBottom: 12,
-                  }}
-                >
-                  <Text style={{ fontSize: 24, marginRight: 12 }}>
-                    {getRideTypeIcon(ride.rideType)}
-                  </Text>
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      style={{
-                        color: colors.text,
-                        fontSize: 16,
-                        fontWeight: "600",
-                        textTransform: "capitalize",
-                      }}
-                    >
-                      {ride.rideType.replace("_", " ")} Ride
-                    </Text>
-                    <Text
-                      style={{
-                        color: colors.textSecondary,
-                        fontSize: 12,
-                        marginTop: 2,
-                      }}
-                    >
-                      {formatDate(ride.createdAt)}
-                    </Text>
-                  </View>
-                  <View
-                    style={{
-                      backgroundColor: getStatusColor(ride.status) + "20",
-                      paddingHorizontal: 8,
-                      paddingVertical: 4,
-                      borderRadius: 12,
-                      alignItems: "center",
-                    }}
-                  >
-                    <Text
-                      style={{
-                        color: getStatusColor(ride.status),
-                        fontSize: 11,
-                        fontWeight: "600",
-                      }}
-                    >
-                      {getStatusText(ride.status)}
-                    </Text>
-                  </View>
-                </View>
+          <View style={styles.ridesList}>
+            {filteredRides.map((ride) => {
+              const rideIcon = getRideTypeIcon(ride.rideType);
+              const IconComponent = rideIcon.lib;
 
-                {/* Destination */}
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "flex-start",
-                    marginBottom: 12,
-                  }}
+              return (
+                <Pressable
+                  key={ride.id}
+                  onPress={() => handleRidePress(ride)}
+                  style={styles.rideCard}
                 >
-                  <MaterialIcons
-                    name="place"
-                    size={16}
-                    color={colors.textSecondary}
-                    style={{ marginRight: 8, marginTop: 2 }}
-                  />
-                  <Text
-                    style={{
-                      color: colors.text,
-                      fontSize: 14,
-                      flex: 1,
-                      lineHeight: 20,
-                    }}
-                    numberOfLines={2}
-                  >
-                    {ride.destinationAddress || "Unknown destination"}
-                  </Text>
-                </View>
-
-                {/* Footer */}
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    paddingTop: 12,
-                    borderTopWidth: 1,
-                    borderTopColor: colors.border,
-                  }}
-                >
-                  <View style={{ flexDirection: "row", alignItems: "center" }}>
-                    {ride.driverName && (
-                      <>
-                        <Feather
-                          name="user"
-                          size={14}
-                          color={colors.textSecondary}
-                        />
-                        <Text
-                          style={{
-                            color: colors.textSecondary,
-                            fontSize: 12,
-                            marginLeft: 4,
-                          }}
-                        >
-                          {ride.driverName}
-                        </Text>
-                      </>
-                    )}
-                  </View>
-
-                  <View style={{ flexDirection: "row", alignItems: "center" }}>
-                    {ride.fare && (
-                      <Text
-                        style={{
-                          color: colors.text,
-                          fontSize: 14,
-                          fontWeight: "600",
-                          marginRight: 8,
-                        }}
-                      >
-                        ${ride.fare}
+                  {/* Header */}
+                  <View style={styles.rideCardHeader}>
+                    <View style={styles.rideTypeIconContainer}>
+                      <IconComponent
+                        name={rideIcon.icon}
+                        size={20}
+                        color={colors.primary}
+                      />
+                    </View>
+                    <View style={styles.rideInfo}>
+                      <Text style={styles.rideTypeName}>
+                        {ride.rideType.replace("_", " ")} Ride
                       </Text>
-                    )}
-                    {[
-                      "searching",
-                      "accepted",
-                      "arrived",
-                      "in_progress",
-                    ].includes(ride.status) && (
-                      <View
-                        style={{
-                          backgroundColor: colors.primary,
-                          paddingHorizontal: 8,
-                          paddingVertical: 4,
-                          borderRadius: 12,
-                        }}
+                      <Text style={styles.rideDate}>
+                        {formatDate(ride.createdAt)}
+                      </Text>
+                    </View>
+                    <View
+                      style={[
+                        styles.statusBadge,
+                        { backgroundColor: getStatusColor(ride.status) + "20" },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.statusText,
+                          { color: getStatusColor(ride.status) },
+                        ]}
                       >
-                        <Text
-                          style={{
-                            color: colors.background,
-                            fontSize: 11,
-                            fontWeight: "600",
-                          }}
-                        >
-                          Active
-                        </Text>
-                      </View>
-                    )}
+                        {getStatusText(ride.status)}
+                      </Text>
+                    </View>
                   </View>
-                </View>
-              </Pressable>
-            ))}
+
+                  {/* Destination */}
+                  <View style={styles.destinationContainer}>
+                    <MaterialIcons
+                      name="place"
+                      size={16}
+                      color={colors.textSecondary}
+                    />
+                    <Text style={styles.destinationText} numberOfLines={2}>
+                      {ride.destinationAddress || "Unknown destination"}
+                    </Text>
+                  </View>
+
+                  {/* Footer */}
+                  <View style={styles.rideCardFooter}>
+                    <View style={styles.driverInfo}>
+                      {ride.driverName && (
+                        <>
+                          <Feather
+                            name="user"
+                            size={14}
+                            color={colors.textSecondary}
+                          />
+                          <Text style={styles.driverName}>
+                            {ride.driverName}
+                          </Text>
+                        </>
+                      )}
+                    </View>
+
+                    <View style={styles.rideFooterRight}>
+                      {ride.fare && (
+                        <Text style={styles.fareText}>PKR {ride.fare}</Text>
+                      )}
+                      {[
+                        "searching",
+                        "accepted",
+                        "arrived",
+                        "in_progress",
+                      ].includes(ride.status) && (
+                        <View style={styles.activeBadge}>
+                          <View style={styles.activeDot} />
+                          <Text style={styles.activeText}>Active</Text>
+                        </View>
+                      )}
+                      <Feather
+                        name="chevron-right"
+                        size={18}
+                        color={colors.textSecondary}
+                      />
+                    </View>
+                  </View>
+                </Pressable>
+              );
+            })}
           </View>
         )}
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingText: {
+    color: colors.text,
+    marginTop: 16,
+    fontSize: 16,
+  },
+  header: {
+    backgroundColor: colors.background,
+    paddingTop: 10,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  headerTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
+  backButton: {
+    padding: 8,
+    marginRight: 12,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: colors.text,
+    flex: 1,
+    textAlign: "center",
+  },
+  headerPlaceholder: {
+    width: 40,
+  },
+  tabContainer: {
+    flexDirection: "row",
+    backgroundColor: colors.bg_accent,
+    borderRadius: 12,
+    padding: 4,
+    marginHorizontal: 16,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  tabActive: {
+    backgroundColor: colors.primary,
+  },
+  tabText: {
+    color: colors.text,
+    fontWeight: "500",
+    fontSize: 14,
+    textTransform: "capitalize",
+  },
+  tabTextActive: {
+    color: colors.background,
+    fontWeight: "600",
+  },
+  content: {
+    flex: 1,
+  },
+  emptyStateContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 80,
+    paddingHorizontal: 32,
+  },
+  emptyStateIcon: {
+    width: 80,
+    height: 80,
+    backgroundColor: colors.bg_accent,
+    borderRadius: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 20,
+  },
+  emptyStateTitle: {
+    color: colors.text,
+    fontSize: 18,
+    fontWeight: "600",
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  emptyStateDescription: {
+    color: colors.textSecondary,
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  bookRideButton: {
+    backgroundColor: colors.primary,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 25,
+    gap: 8,
+  },
+  bookRideButtonText: {
+    color: colors.background,
+    fontWeight: "600",
+    fontSize: 16,
+  },
+  ridesList: {
+    padding: 16,
+  },
+  rideCard: {
+    backgroundColor: colors.background,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    shadowColor: colors.text,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  rideCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  rideTypeIconContainer: {
+    width: 44,
+    height: 44,
+    backgroundColor: colors.bg_accent,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  rideInfo: {
+    flex: 1,
+  },
+  rideTypeName: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: "600",
+    textTransform: "capitalize",
+    marginBottom: 2,
+  },
+  rideDate: {
+    color: colors.textSecondary,
+    fontSize: 12,
+  },
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  destinationContainer: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 16,
+    paddingLeft: 4,
+  },
+  destinationText: {
+    color: colors.text,
+    fontSize: 14,
+    flex: 1,
+    lineHeight: 20,
+    marginLeft: 8,
+  },
+  rideCardFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  driverInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  driverName: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    marginLeft: 6,
+  },
+  rideFooterRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  fareText: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  activeBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.primary + "20",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  activeDot: {
+    width: 6,
+    height: 6,
+    backgroundColor: colors.primary,
+    borderRadius: 3,
+  },
+  activeText: {
+    color: colors.primary,
+    fontSize: 11,
+    fontWeight: "600",
+  },
+});

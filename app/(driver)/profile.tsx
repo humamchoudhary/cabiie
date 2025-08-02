@@ -172,7 +172,11 @@ export default function ProfileScreen() {
                     User Type
                   </Text>
                   <Text
-                    style={{ fontSize: 16, fontWeight: "600", color: colors.text }}
+                    style={{
+                      fontSize: 16,
+                      fontWeight: "600",
+                      color: colors.text,
+                    }}
                   >
                     {profile?.userType || "Driver"}
                   </Text>
@@ -199,7 +203,11 @@ export default function ProfileScreen() {
                     Account Status
                   </Text>
                   <Text
-                    style={{ fontSize: 16, fontWeight: "600", color: colors.text }}
+                    style={{
+                      fontSize: 16,
+                      fontWeight: "600",
+                      color: colors.text,
+                    }}
                   >
                     {profile?.status || "Active"}
                   </Text>
@@ -222,7 +230,11 @@ export default function ProfileScreen() {
                     Rating
                   </Text>
                   <Text
-                    style={{ fontSize: 16, fontWeight: "600", color: colors.text }}
+                    style={{
+                      fontSize: 16,
+                      fontWeight: "600",
+                      color: colors.text,
+                    }}
                   >
                     {profile?.rating || "5.0"}
                   </Text>
@@ -274,7 +286,11 @@ export default function ProfileScreen() {
                     Vehicle Type
                   </Text>
                   <Text
-                    style={{ fontSize: 16, fontWeight: "600", color: colors.text }}
+                    style={{
+                      fontSize: 16,
+                      fontWeight: "600",
+                      color: colors.text,
+                    }}
                   >
                     {profile?.vehicleInfo?.type || "N/A"}
                   </Text>
@@ -301,7 +317,11 @@ export default function ProfileScreen() {
                     License Plate
                   </Text>
                   <Text
-                    style={{ fontSize: 16, fontWeight: "600", color: colors.text }}
+                    style={{
+                      fontSize: 16,
+                      fontWeight: "600",
+                      color: colors.text,
+                    }}
                   >
                     {profile?.vehicleInfo?.licensePlate || "N/A"}
                   </Text>
@@ -324,7 +344,11 @@ export default function ProfileScreen() {
                     Vehicle Model
                   </Text>
                   <Text
-                    style={{ fontSize: 16, fontWeight: "600", color: colors.text }}
+                    style={{
+                      fontSize: 16,
+                      fontWeight: "600",
+                      color: colors.text,
+                    }}
                   >
                     {profile?.vehicleInfo?.model || "N/A"}
                   </Text>
@@ -334,68 +358,6 @@ export default function ProfileScreen() {
           </View>
 
           {/* Stats Card */}
-          <View
-            style={{
-              flexDirection: "row",
-              backgroundColor: colors.bg_accent,
-              borderRadius: 16,
-              padding: 20,
-              marginBottom: 20,
-              borderWidth: 1,
-              borderColor: colors.border,
-            }}
-          >
-            <View style={{ flex: 1, alignItems: "center" }}>
-              <View
-                style={{
-                  backgroundColor: colors.primary,
-                  padding: 8,
-                  borderRadius: 50,
-                  marginBottom: 8,
-                }}
-              >
-                <Feather name="dollar-sign" size={16} color={colors.background} />
-              </View>
-              <Text
-                style={{
-                  fontSize: 16,
-                  fontWeight: "700",
-                  color: colors.text,
-                  marginBottom: 4,
-                }}
-              >
-                {profile?.totalEarnings ? `PKR ${profile.totalEarnings.toFixed(2)}` : "PKR 0.00"}
-              </Text>
-              <Text style={{ fontSize: 12, color: colors.textSecondary }}>
-                Total Earnings
-              </Text>
-            </View>
-            <View style={{ flex: 1, alignItems: "center" }}>
-              <View
-                style={{
-                  backgroundColor: colors.primary,
-                  padding: 8,
-                  borderRadius: 50,
-                  marginBottom: 8,
-                }}
-              >
-                <Feather name="check-circle" size={16} color={colors.background} />
-              </View>
-              <Text
-                style={{
-                  fontSize: 16,
-                  fontWeight: "700",
-                  color: colors.text,
-                  marginBottom: 4,
-                }}
-              >
-                {profile?.completedRides || 0}
-              </Text>
-              <Text style={{ fontSize: 12, color: colors.textSecondary }}>
-                Completed Rides
-              </Text>
-            </View>
-          </View>
 
           {/* Logout Button */}
           <TouchableOpacity

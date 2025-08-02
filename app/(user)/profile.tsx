@@ -6,6 +6,7 @@ import {
   Image,
   StyleSheet,
   ScrollView,
+  Linking,
 } from "react-native";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "expo-router";
@@ -26,33 +27,12 @@ export default function UserProfileScreen() {
       onPress: () => router.push("/(user)/rides"),
     },
     {
-      id: "payment",
-      title: "Payment Methods",
-      subtitle: "Manage your payment options",
-      icon: "payment",
-      onPress: () => {
-        // TODO: Implement payment methods screen
-        console.log("Navigate to payment methods");
-      },
-    },
-    {
       id: "support",
       title: "Help & Support",
       subtitle: "Get help with your rides",
       icon: "help",
       onPress: () => {
-        // TODO: Implement support screen
-        console.log("Navigate to support");
-      },
-    },
-    {
-      id: "settings",
-      title: "Settings",
-      subtitle: "App preferences and notifications",
-      icon: "settings",
-      onPress: () => {
-        // TODO: Implement settings screen
-        console.log("Navigate to settings");
+        Linking.openURL("tel:051111111");
       },
     },
   ];
@@ -69,13 +49,6 @@ export default function UserProfileScreen() {
         )}
         <Text style={styles.name}>{user?.displayName || "User"}</Text>
         <Text style={styles.email}>{user?.email}</Text>
-
-        <View style={styles.statsContainer}>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>12</Text>
-            <Text style={styles.statLabel}>Trips</Text>
-          </View>
-        </View>
       </View>
 
       <View style={styles.menuContainer}>

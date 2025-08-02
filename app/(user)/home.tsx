@@ -11,6 +11,7 @@ import {
   Animated,
   ScrollView,
   Dimensions,
+  StyleSheet,
 } from "react-native";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "expo-router";
@@ -104,9 +105,8 @@ export default function UserHomeScreen() {
   const [estimatedTime, setEstimatedTime] = useState<string | null>(null);
 
   // Get user location
-  // Update your useEffect for location
   useEffect(() => {
-    let isMounted = true; // Add mounted check to prevent state updates on unmounted component
+    let isMounted = true;
 
     (async () => {
       try {
@@ -119,12 +119,11 @@ export default function UserHomeScreen() {
           return;
         }
 
-        // Enable high accuracy
         let location = await Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.High,
         });
 
-        console.log("Location fetched:", location); // Add this for debugging
+        console.log("Location fetched:", location);
 
         if (isMounted) {
           setLocation(location);
@@ -147,7 +146,7 @@ export default function UserHomeScreen() {
     })();
 
     return () => {
-      isMounted = false; // Cleanup
+      isMounted = false;
     };
   }, []);
 
@@ -166,7 +165,6 @@ export default function UserHomeScreen() {
           return;
         }
 
-        // Get initial position
         let location = await Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.High,
         });
@@ -181,18 +179,15 @@ export default function UserHomeScreen() {
           });
         }
 
-        // Watch for position updates
         watchId = await Location.watchPositionAsync(
           {
             accuracy: Location.Accuracy.High,
-            distanceInterval: 50, // Update every 50 meters
-            timeInterval: 5000, // Update every 5 seconds
+            distanceInterval: 50,
+            timeInterval: 5000,
           },
           (newLocation) => {
             if (isMounted) {
               setLocation(newLocation);
-              // You might not want to update the region on every small change
-              // to avoid the map jumping around
             }
           },
         );
@@ -204,10 +199,11 @@ export default function UserHomeScreen() {
     return () => {
       isMounted = false;
       if (watchId) {
-        watchId.remove(); // Cleanup the watcher
+        watchId.remove();
       }
     };
   }, []);
+
   // Animate panel on mount
   useEffect(() => {
     Animated.spring(slideAnim, {
@@ -259,7 +255,6 @@ export default function UserHomeScreen() {
             driver.longitude,
           );
           if (distance <= 6) {
-            // Only show drivers within 5km
             drivers.push({
               id: childSnapshot.key,
               ...driver,
@@ -280,7 +275,7 @@ export default function UserHomeScreen() {
     lat2: number,
     lon2: number,
   ) => {
-    const R = 6371; // Earth's radius in km
+    const R = 6371;
     const dLat = ((lat2 - lat1) * Math.PI) / 180;
     const dLon = ((lon2 - lon1) * Math.PI) / 180;
     const a =
@@ -294,14 +289,14 @@ export default function UserHomeScreen() {
   };
 
   const calculateEstimatedTime = (distance: number) => {
-    const averageSpeed = 30; // km/h (city traffic)
+    const averageSpeed = 30;
     const timeInHours = distance / averageSpeed;
     const minutes = Math.ceil(timeInHours * 60);
     return minutes > 1 ? `${minutes} mins` : "1 min";
   };
 
   const calculateFare = (baseRate: number, distance: number) => {
-    const MIN_FARE = 100; // PKR
+    const MIN_FARE = 100;
     const calculatedFare = distance * baseRate;
     return Math.ceil(Math.max(calculatedFare, MIN_FARE));
   };
@@ -496,16 +491,17 @@ export default function UserHomeScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <View style={styles.container}>
       {/* Map View */}
       <MapView
         ref={mapRef}
         provider={PROVIDER_GOOGLE}
-        style={{ flex: 1 }}
+        style={styles.map}
         region={mapRegion}
         onPress={handleMapPress}
         showsUserLocation={true}
         showsMyLocationButton={false}
+        showsCompass={false}
         customMapStyle={[]}
       >
         {/* User Location */}
@@ -517,15 +513,7 @@ export default function UserHomeScreen() {
             }}
             title="Your Location"
           >
-            <View
-              style={{
-                backgroundColor: colors.primary,
-                padding: 8,
-                borderRadius: 20,
-                borderWidth: 3,
-                borderColor: colors.background,
-              }}
-            >
+            <View style={styles.userLocationMarker}>
               <Ionicons name="person" size={16} color={colors.background} />
             </View>
           </Marker>
@@ -534,15 +522,7 @@ export default function UserHomeScreen() {
         {/* Selected Destination */}
         {selectedLocation && (
           <Marker coordinate={selectedLocation} title="Destination">
-            <View
-              style={{
-                backgroundColor: colors.primary,
-                padding: 8,
-                borderRadius: 20,
-                borderWidth: 3,
-                borderColor: colors.background,
-              }}
-            >
+            <View style={styles.destinationMarker}>
               <MaterialIcons name="place" size={16} color={colors.background} />
             </View>
           </Marker>
@@ -567,15 +547,7 @@ export default function UserHomeScreen() {
               title={`Driver ${driver.id.slice(-4)}`}
               description={`${driver.rideType.join(", ")} available`}
             >
-              <View
-                style={{
-                  backgroundColor: colors.background,
-                  padding: 6,
-                  borderRadius: 15,
-                  borderWidth: 2,
-                  borderColor: colors.primary,
-                }}
-              >
+              <View style={styles.driverMarker}>
                 <IconComponent
                   name={iconName}
                   size={12}
@@ -588,60 +560,23 @@ export default function UserHomeScreen() {
       </MapView>
 
       {/* Top Navigation */}
-      <View
-        style={{
-          position: "absolute",
-          top: 60,
-          left: 20,
-          right: 20,
-          flexDirection: "row",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
-      >
-        <View style={{ flexDirection: "row", gap: 12 }}>
+      <View style={styles.topNavigation}>
+        <View style={styles.leftNavButtons}>
           <TouchableOpacity
-            style={{
-              backgroundColor: colors.background,
-              padding: 12,
-              borderRadius: 50,
-              shadowColor: colors.text,
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.1,
-              shadowRadius: 8,
-              elevation: 5,
-            }}
+            style={styles.navButton}
             onPress={() => router.push("/profile")}
           >
             <AntDesign name="user" size={20} color={colors.primary} />
           </TouchableOpacity>
           <TouchableOpacity
-            style={{
-              backgroundColor: colors.background,
-              padding: 12,
-              borderRadius: 50,
-              shadowColor: colors.text,
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.1,
-              shadowRadius: 8,
-              elevation: 5,
-            }}
+            style={styles.navButton}
             onPress={() => router.push("/(user)/rides")}
           >
             <MaterialIcons name="history" size={20} color={colors.primary} />
           </TouchableOpacity>
         </View>
         <TouchableOpacity
-          style={{
-            backgroundColor: colors.background,
-            padding: 12,
-            borderRadius: 50,
-            shadowColor: colors.text,
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.1,
-            shadowRadius: 8,
-            elevation: 5,
-          }}
+          style={styles.navButton}
           onPress={() => {
             console.log(location);
             console.log(mapRef.current);
@@ -661,45 +596,19 @@ export default function UserHomeScreen() {
 
       {/* Search Results Overlay */}
       {showSearchResults && searchResults.length > 0 && (
-        <View
-          style={{
-            position: "absolute",
-            top: 130,
-            left: 20,
-            right: 20,
-            backgroundColor: colors.background,
-            borderRadius: 16,
-            maxHeight: 200,
-            shadowColor: colors.text,
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.1,
-            shadowRadius: 12,
-            elevation: 10,
-          }}
-        >
+        <View style={styles.searchResultsOverlay}>
           <ScrollView>
             {searchResults.map((place, index) => (
               <Pressable
                 key={place.id}
                 onPress={() => selectSearchResult(place)}
-                style={{
-                  padding: 16,
-                  borderBottomWidth: index < searchResults.length - 1 ? 1 : 0,
-                  borderBottomColor: colors.border,
-                }}
+                style={[
+                  styles.searchResultItem,
+                  index < searchResults.length - 1 && styles.searchResultBorder,
+                ]}
               >
-                <Text style={{ color: colors.text, fontWeight: "600", fontSize: 16 }}>
-                  {place.name}
-                </Text>
-                <Text
-                  style={{
-                    color: colors.textSecondary,
-                    fontSize: 14,
-                    marginTop: 4,
-                  }}
-                >
-                  {place.address}
-                </Text>
+                <Text style={styles.searchResultName}>{place.name}</Text>
+                <Text style={styles.searchResultAddress}>{place.address}</Text>
               </Pressable>
             ))}
           </ScrollView>
@@ -707,70 +616,24 @@ export default function UserHomeScreen() {
       )}
 
       {/* Bottom Panel */}
-      <Animated.View
-        style={{
-          position: "absolute",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: slideAnim,
-          backgroundColor: colors.background,
-          borderTopLeftRadius: 24,
-          borderTopRightRadius: 24,
-          shadowColor: colors.text,
-          shadowOffset: { width: 0, height: -4 },
-          shadowOpacity: 0.1,
-          shadowRadius: 12,
-          elevation: 10,
-        }}
-      >
+      <Animated.View style={[styles.bottomPanel, { height: slideAnim }]}>
         {/* Drag Handle */}
         <TouchableOpacity
           onPress={expandPanel}
-          style={{ alignItems: "center", paddingVertical: 12 }}
+          style={styles.dragHandleContainer}
         >
-          <View
-            style={{
-              width: 40,
-              height: 4,
-              backgroundColor: colors.border,
-              borderRadius: 2,
-            }}
-          />
+          <View style={styles.dragHandle} />
         </TouchableOpacity>
 
         <ScrollView
           showsVerticalScrollIndicator={false}
-          style={{ flex: 1, paddingHorizontal: 20 }}
+          style={styles.panelContent}
         >
           {/* Destination Input */}
-          <View style={{ marginBottom: 24 }}>
-            <Text
-              style={{
-                color: colors.text,
-                fontSize: 18,
-                fontWeight: "600",
-                marginBottom: 12,
-              }}
-            >
-              Where to?
-            </Text>
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                backgroundColor: colors.bg_accent,
-                borderRadius: 16,
-                borderWidth: 1,
-                borderColor: colors.border,
-                paddingHorizontal: 16,
-              }}
-            >
-              <Feather
-                name="search"
-                size={20}
-                color={colors.textSecondary}
-              />
+          <View style={styles.destinationSection}>
+            <Text style={styles.sectionTitle}>Where to?</Text>
+            <View style={styles.destinationInputContainer}>
+              <Feather name="search" size={20} color={colors.textSecondary} />
               <TextInput
                 placeholder="Search destinations..."
                 placeholderTextColor={colors.textSecondary}
@@ -779,21 +642,14 @@ export default function UserHomeScreen() {
                   setDestination(text);
                   searchPlaces(text);
                 }}
-                style={{
-                  flex: 1,
-                  padding: 16,
-                  color: colors.text,
-                  fontSize: 16,
-                }}
+                style={styles.destinationInput}
               />
             </View>
             <Text
-              style={{
-                color: selectedLocation ? colors.primary : colors.textSecondary,
-                fontSize: 12,
-                marginTop: 8,
-                fontWeight: selectedLocation ? "600" : "400",
-              }}
+              style={[
+                styles.destinationStatus,
+                selectedLocation && styles.destinationStatusSelected,
+              ]}
             >
               {selectedLocation
                 ? "✓ Destination selected"
@@ -802,75 +658,37 @@ export default function UserHomeScreen() {
           </View>
 
           {/* Ride Types */}
-          <View style={{ marginBottom: 24 }}>
-            <Text
-              style={{
-                color: colors.text,
-                fontSize: 18,
-                fontWeight: "600",
-                marginBottom: 16,
-              }}
-            >
-              Choose a ride
-            </Text>
-            <View style={{ gap: 12 }}>
+          <View style={styles.rideTypesSection}>
+            <Text style={styles.sectionTitle}>Choose a ride</Text>
+            <View style={styles.rideTypesList}>
               {rideTypes.map((ride) => {
                 const IconComponent = ride.iconLib;
+                const isSelected = selectedRide === ride.id;
+
                 return (
                   <Pressable
                     key={ride.id}
                     onPress={() => setSelectedRide(ride.id)}
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      backgroundColor:
-                        selectedRide === ride.id
-                          ? colors.secondary
-                          : colors.background,
-                      borderWidth: selectedRide === ride.id ? 2 : 1,
-                      borderColor:
-                        selectedRide === ride.id
-                          ? colors.primary
-                          : colors.border,
-                      borderRadius: 16,
-                      padding: 16,
-                    }}
+                    style={[
+                      styles.rideTypeItem,
+                      isSelected && styles.rideTypeItemSelected,
+                    ]}
                   >
                     <View
-                      style={{
-                        backgroundColor:
-                          selectedRide === ride.id
-                            ? colors.primary
-                            : colors.bg_accent,
-                        padding: 12,
-                        borderRadius: 50,
-                        marginRight: 16,
-                      }}
+                      style={[
+                        styles.rideTypeIcon,
+                        isSelected && styles.rideTypeIconSelected,
+                      ]}
                     >
                       <IconComponent
                         name={ride.icon}
                         size={20}
-                        color={
-                          selectedRide === ride.id
-                            ? colors.background
-                            : colors.primary
-                        }
+                        color={isSelected ? colors.background : colors.primary}
                       />
                     </View>
-                    <View style={{ flex: 1 }}>
-                      <Text
-                        style={{
-                          color: colors.text,
-                          fontWeight: "600",
-                          fontSize: 16,
-                          marginBottom: 4,
-                        }}
-                      >
-                        {ride.name}
-                      </Text>
-                      <Text
-                        style={{ color: colors.textSecondary, fontSize: 14 }}
-                      >
+                    <View style={styles.rideTypeInfo}>
+                      <Text style={styles.rideTypeName}>{ride.name}</Text>
+                      <Text style={styles.rideTypeDetails}>
                         {ride.time} •{" "}
                         {
                           nearbyDrivers.filter((d) =>
@@ -880,17 +698,13 @@ export default function UserHomeScreen() {
                         nearby
                       </Text>
                     </View>
-                    {estimatedFare && selectedRide === ride.id ? (
-                      <Text
-                        style={{ color: colors.text, fontWeight: "700", fontSize: 16 }}
-                      >
-                        PKR{estimatedFare.toFixed(0)}
+                    {estimatedFare && isSelected ? (
+                      <Text style={styles.rideTypePrice}>
+                        PKR {estimatedFare.toFixed(0)}
                       </Text>
                     ) : (
-                      <Text
-                        style={{ color: colors.textSecondary, fontSize: 14 }}
-                      >
-                        PKR{ride.baseRate}/km
+                      <Text style={styles.rideTypeBaseRate}>
+                        PKR {ride.baseRate}/km
                       </Text>
                     )}
                   </Pressable>
@@ -901,107 +715,66 @@ export default function UserHomeScreen() {
 
           {/* Ride Details */}
           {selectedRide && selectedLocation && (
-            <View
-              style={{
-                backgroundColor: "#F9FAFB",
-                borderRadius: 16,
-                padding: 20,
-                marginBottom: 24,
-                borderWidth: 1,
-                borderColor: "#E5E7EB",
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 16,
-                  fontWeight: "600",
-                  color: "#000000",
-                  marginBottom: 16,
-                }}
-              >
-                Trip Details
-              </Text>
-              <View style={{ gap: 12 }}>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
-                >
-                  <View style={{ flexDirection: "row", alignItems: "center" }}>
-                    <View
-                      style={{
-                        backgroundColor: "#000000",
-                        padding: 6,
-                        borderRadius: 50,
-                        marginRight: 12,
-                      }}
-                    >
-                      <Feather name="navigation" size={12} color="#FFFFFF" />
+            <View style={styles.tripDetailsContainer}>
+              <Text style={styles.tripDetailsTitle}>Trip Details</Text>
+              <View style={styles.tripDetailsContent}>
+                <View style={styles.tripDetailRow}>
+                  <View style={styles.tripDetailLabel}>
+                    <View style={styles.tripDetailIcon}>
+                      <Feather
+                        name="navigation"
+                        size={12}
+                        color={colors.background}
+                      />
                     </View>
-                    <Text style={{ color: "#6B7280", fontSize: 14 }}>Distance</Text>
+                    <Text style={styles.tripDetailLabelText}>Distance</Text>
                   </View>
-                  <Text style={{ color: "#000000", fontWeight: "600" }}>
+                  <Text style={styles.tripDetailValue}>
                     {estimatedDistance
                       ? estimatedDistance.toFixed(1) + " km"
                       : "--"}
                   </Text>
                 </View>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
-                >
-                  <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <View style={styles.tripDetailRow}>
+                  <View style={styles.tripDetailLabel}>
                     <View
-                      style={{
-                        backgroundColor: "#000000",
-                        padding: 6,
-                        borderRadius: 50,
-                        marginRight: 12,
-                      }}
+                      style={[
+                        styles.tripDetailIcon,
+                        { backgroundColor: colors.primary },
+                      ]}
                     >
-                      <Feather name="clock" size={12} color="#FFFFFF" />
+                      <Feather
+                        name="clock"
+                        size={12}
+                        color={colors.background}
+                      />
                     </View>
-                    <Text style={{ color: "#6B7280", fontSize: 14 }}>
+                    <Text style={styles.tripDetailLabelText}>
                       Estimated Time
                     </Text>
                   </View>
-                  <Text style={{ color: "#000000", fontWeight: "600" }}>
+                  <Text style={styles.tripDetailValue}>
                     {estimatedTime || "--"}
                   </Text>
                 </View>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
-                >
-                  <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <View style={styles.tripDetailRow}>
+                  <View style={styles.tripDetailLabel}>
                     <View
-                      style={{
-                        backgroundColor: "#000000",
-                        padding: 6,
-                        borderRadius: 50,
-                        marginRight: 12,
-                      }}
+                      style={[
+                        styles.tripDetailIcon,
+                        { backgroundColor: colors.primary },
+                      ]}
                     >
-                      <Feather name="dollar-sign" size={12} color="#FFFFFF" />
+                      <Feather
+                        name="dollar-sign"
+                        size={12}
+                        color={colors.background}
+                      />
                     </View>
-                    <Text style={{ color: "#6B7280", fontSize: 14 }}>Fare</Text>
+                    <Text style={styles.tripDetailLabelText}>Fare</Text>
                   </View>
-                  <Text
-                    style={{
-                      color: "#000000",
-                      fontWeight: "700",
-                      fontSize: 16,
-                    }}
-                  >
-                    {estimatedFare ? "PKR" + estimatedFare.toFixed(0) : "--"}
+                  <Text style={styles.tripDetailValuePrice}>
+                    {estimatedFare ? "PKR " + estimatedFare.toFixed(0) : "--"}
                   </Text>
                 </View>
               </View>
@@ -1012,26 +785,21 @@ export default function UserHomeScreen() {
           <Pressable
             onPress={requestRide}
             disabled={!selectedRide || !selectedLocation || loading}
-            style={{
-              backgroundColor:
-                !selectedRide || !selectedLocation
-                  ? "#E5E7EB"
-                  : "#000000",
-              padding: 18,
-              borderRadius: 16,
-              alignItems: "center",
-              marginBottom: 40,
-            }}
+            style={[
+              styles.requestButton,
+              (!selectedRide || !selectedLocation) &&
+                styles.requestButtonDisabled,
+            ]}
           >
             {loading ? (
-              <ActivityIndicator color="#FFFFFF" />
+              <ActivityIndicator color={colors.background} />
             ) : (
               <Text
-                style={{
-                  color: !selectedRide || !selectedLocation ? "#9CA3AF" : "#FFFFFF",
-                  fontSize: 16,
-                  fontWeight: "600",
-                }}
+                style={[
+                  styles.requestButtonText,
+                  (!selectedRide || !selectedLocation) &&
+                    styles.requestButtonTextDisabled,
+                ]}
               >
                 Request{" "}
                 {selectedRide
@@ -1045,3 +813,264 @@ export default function UserHomeScreen() {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  map: {
+    flex: 1,
+  },
+  userLocationMarker: {
+    backgroundColor: colors.primary,
+    padding: 8,
+    borderRadius: 20,
+    borderWidth: 3,
+    borderColor: colors.background,
+  },
+  destinationMarker: {
+    backgroundColor: colors.primary,
+    padding: 8,
+    borderRadius: 20,
+    borderWidth: 3,
+    borderColor: colors.background,
+  },
+  driverMarker: {
+    backgroundColor: colors.background,
+    padding: 6,
+    borderRadius: 15,
+    borderWidth: 2,
+    borderColor: colors.primary,
+  },
+  topNavigation: {
+    position: "absolute",
+    top: 20,
+    left: 20,
+    right: 20,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  leftNavButtons: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  navButton: {
+    backgroundColor: colors.background,
+    padding: 12,
+    borderRadius: 50,
+    shadowColor: colors.text,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  searchResultsOverlay: {
+    position: "absolute",
+    top: 130,
+    left: 20,
+    right: 20,
+    backgroundColor: colors.background,
+    borderRadius: 16,
+    maxHeight: 200,
+    shadowColor: colors.text,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  searchResultItem: {
+    padding: 16,
+  },
+  searchResultBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  searchResultName: {
+    color: colors.text,
+    fontWeight: "600",
+    fontSize: 16,
+  },
+  searchResultAddress: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    marginTop: 4,
+  },
+  bottomPanel: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: colors.background,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    shadowColor: colors.text,
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  dragHandleContainer: {
+    alignItems: "center",
+    paddingVertical: 12,
+  },
+  dragHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: colors.border,
+    borderRadius: 2,
+  },
+  panelContent: {
+    flex: 1,
+    paddingHorizontal: 20,
+  },
+  destinationSection: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    color: colors.text,
+    fontSize: 18,
+    fontWeight: "600",
+    marginBottom: 12,
+  },
+  destinationInputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.bg_accent,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 16,
+  },
+  destinationInput: {
+    flex: 1,
+    padding: 16,
+    color: colors.text,
+    fontSize: 16,
+  },
+  destinationStatus: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    marginTop: 8,
+    fontWeight: "400",
+  },
+  destinationStatusSelected: {
+    color: colors.primary,
+    fontWeight: "600",
+  },
+  rideTypesSection: {
+    marginBottom: 24,
+  },
+  rideTypesList: {
+    gap: 12,
+  },
+  rideTypeItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 16,
+    padding: 16,
+  },
+  rideTypeItemSelected: {
+    backgroundColor: colors.bg_accent,
+    borderWidth: 2,
+    borderColor: colors.primary,
+  },
+  rideTypeIcon: {
+    backgroundColor: colors.bg_accent,
+    padding: 12,
+    borderRadius: 50,
+    marginRight: 16,
+  },
+  rideTypeIconSelected: {
+    backgroundColor: colors.primary,
+  },
+  rideTypeInfo: {
+    flex: 1,
+  },
+  rideTypeName: {
+    color: colors.text,
+    fontWeight: "600",
+    fontSize: 16,
+    marginBottom: 4,
+  },
+  rideTypeDetails: {
+    color: colors.textSecondary,
+    fontSize: 14,
+  },
+  rideTypePrice: {
+    color: colors.text,
+    fontWeight: "700",
+    fontSize: 16,
+  },
+  rideTypeBaseRate: {
+    color: colors.textSecondary,
+    fontSize: 14,
+  },
+  tripDetailsContainer: {
+    backgroundColor: colors.bg_accent,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  tripDetailsTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: colors.text,
+    marginBottom: 16,
+  },
+  tripDetailsContent: {
+    gap: 12,
+  },
+  tripDetailRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  tripDetailLabel: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  tripDetailIcon: {
+    backgroundColor: colors.primary,
+    padding: 8,
+    borderRadius: 50,
+    marginRight: 12,
+  },
+  tripDetailLabelText: {
+    color: colors.textSecondary,
+    fontSize: 14,
+  },
+  tripDetailValue: {
+    color: colors.text,
+    fontWeight: "600",
+  },
+  tripDetailValuePrice: {
+    color: colors.text,
+    fontWeight: "700",
+    fontSize: 16,
+  },
+  requestButton: {
+    backgroundColor: colors.primary,
+    padding: 18,
+    borderRadius: 16,
+    alignItems: "center",
+    marginBottom: 40,
+  },
+  requestButtonDisabled: {
+    backgroundColor: colors.bg_accent,
+  },
+  requestButtonText: {
+    color: colors.background,
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  requestButtonTextDisabled: {
+    color: colors.textSecondary,
+  },
+});

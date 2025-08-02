@@ -39,7 +39,7 @@ export default function RootLayout() {
   // seedDemoDrivers();
   return (
     <AuthProvider>
-      <StatusBar style="dark" />
+      <StatusBar hidden={true} />
       <AuthLayout />
     </AuthProvider>
   );

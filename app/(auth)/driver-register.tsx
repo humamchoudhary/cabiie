@@ -182,9 +182,10 @@ export default function DriverRegisterScreen() {
         },
         driverStatus: "pending", // Needs admin approval
         createdAt: new Date().toISOString(),
-        rating: 5, // Default rating for new drivers
+        rating: 0, // Default rating for new drivers
         tripsCompleted: 0,
         earnings: 0,
+        ratings: [],
       });
 
       // Redirect to driver home (or application pending screen)
@@ -225,14 +226,14 @@ export default function DriverRegisterScreen() {
             <Pressable
               onPress={() => setActiveCamera(type)}
               className="p-2 rounded flex-1 items-center"
-              style={{ backgroundColor: colors.primaryLight }}
+              style={{ backgroundColor: colors.primary }}
             >
               <Text style={{ color: colors.bg_accent }}>Retake Photo</Text>
             </Pressable>
             <Pressable
               onPress={() => pickImage(type)}
               className="p-2 rounded flex-1 items-center"
-              style={{ backgroundColor: colors.secondaryLight }}
+              style={{ backgroundColor: colors.secondary }}
             >
               <Text style={{ color: colors.bg_accent }}>Choose Different</Text>
             </Pressable>
@@ -245,7 +246,7 @@ export default function DriverRegisterScreen() {
             disabled={!cameraPermissions?.granted}
             className="p-3 rounded flex-1 items-center"
             style={{
-              backgroundColor: colors.primaryLight,
+              backgroundColor: colors.primary,
               opacity: cameraPermissions?.granted ? 1 : 0.6,
             }}
           >

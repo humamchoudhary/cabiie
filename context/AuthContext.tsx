@@ -58,7 +58,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.warn("User document not found in Firestore");
         }
         setError(null);
-        console.log(userId);
       } catch (err) {
         console.error("Error fetching user role:", err);
         setUserRole("unset");
