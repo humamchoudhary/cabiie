@@ -15,7 +15,8 @@ import {
   ScrollView,
 } from "react-native";
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "@/config/firebase";
+import { auth, firestore } from "@/config/firebase";
+import { doc, getDoc } from "firebase/firestore";
 import { useRouter } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
 import { colors } from "@/utils/colors";
@@ -33,7 +34,7 @@ export default function LoginScreen() {
   const { user, userRole } = useAuth();
 
   useEffect(() => {
-    if (user) {
+    if (user && userRole) {
       if (userRole === "user") {
         router.replace("/(user)/home");
       } else if (userRole === "driver") {
@@ -45,11 +46,84 @@ export default function LoginScreen() {
   const handleLogin = async () => {
     setLoading(true);
     setError("");
+
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
+        email,
+        password,
+      );
+      const user = userCredential.user;
+
+      // Get user data from Firestore to check userType and verification status
+      const userDocRef = doc(firestore, "users", user.uid);
+      const userDoc = await getDoc(userDocRef);
+
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        const userType = userData.userType;
+
+        // Check if user is a driver and if they're verified
+        if (userType === "driver") {
+          console.log(userData);
+          if (!userData.verified) {
+            console.log("user not verified");
+            // Driver is not verified yet - navigate to unverified screen
+            router.replace("/(auth)/unverified");
+            setLoading(false);
+            return;
+          } else {
+            // Driver is verified, they can proceed
+            router.replace("/(driver)/home");
+          }
+        } else if (userType === "user") {
+          // Regular user, proceed normally
+          router.replace("/(user)/home");
+        } else {
+          setError("Invalid user type. Please contact support.");
+          await auth.signOut();
+        }
+      } else {
+        setError("User not found.");
+        await auth.signOut();
+      }
     } catch (error: any) {
-      console.log(error);
-      setError(error.message);
+      console.log("Login error:", error);
+
+      // Handle specific Firebase Auth errors
+      let errorMessage = "An error occurred during login.";
+
+      await auth.signOut();
+      switch (error.code) {
+        case "auth/invalid-email":
+          errorMessage = "Please enter a valid email address.";
+          break;
+        case "auth/user-disabled":
+          errorMessage =
+            "This account has been disabled. Please contact support.";
+          break;
+        case "auth/user-not-found":
+          errorMessage = "No account found with this email address.";
+          break;
+        case "auth/wrong-password":
+          errorMessage = "Incorrect password. Please try again.";
+          break;
+        case "auth/invalid-credential":
+          errorMessage =
+            "Invalid email or password. Please check your credentials.";
+          break;
+        case "auth/too-many-requests":
+          errorMessage = "Too many failed attempts. Please try again later.";
+          break;
+        case "auth/network-request-failed":
+          errorMessage =
+            "Network error. Please check your internet connection.";
+          break;
+        default:
+          errorMessage = error.message || "Login failed. Please try again.";
+      }
+
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -65,10 +139,10 @@ export default function LoginScreen() {
         <ScrollView
           contentContainerStyle={styles.scrollContainer}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
           {/* Logo Section */}
           <View style={styles.logoContainer}>
-            {/* Replace this with your actual logo */}
             <Image
               source={require("@/assets/images/logo.png")}
               style={styles.logo}
@@ -87,7 +161,7 @@ export default function LoginScreen() {
           {/* Error Message */}
           {error ? (
             <View style={styles.errorContainer}>
-              <Ionicons name="alert-circle" size={20} color={colors.error} />
+              <Ionicons name="alert-circle" size={20} color="#F00" />
               <Text style={styles.errorText}>{error}</Text>
             </View>
           ) : null}
@@ -99,7 +173,7 @@ export default function LoginScreen() {
               <Ionicons
                 name="mail-outline"
                 size={20}
-                color={colors.secondary}
+                color={colors.textSecondary}
                 style={styles.inputIcon}
               />
               <TextInput
@@ -108,8 +182,10 @@ export default function LoginScreen() {
                 onChangeText={setEmail}
                 keyboardType="email-address"
                 autoCapitalize="none"
-                placeholderTextColor={colors.secondary}
+                autoComplete="email"
+                placeholderTextColor={colors.textSecondary}
                 style={styles.textInput}
+                editable={!loading}
               />
             </View>
 
@@ -118,7 +194,7 @@ export default function LoginScreen() {
               <Ionicons
                 name="lock-closed-outline"
                 size={20}
-                color={colors.secondary}
+                color={colors.textSecondary}
                 style={styles.inputIcon}
               />
               <TextInput
@@ -126,17 +202,20 @@ export default function LoginScreen() {
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!passwordVisible}
-                placeholderTextColor={colors.secondary}
+                autoComplete="password"
+                placeholderTextColor={colors.textSecondary}
                 style={[styles.textInput, { paddingRight: 50 }]}
+                editable={!loading}
               />
               <Pressable
                 onPress={() => setPasswordVisible(!passwordVisible)}
                 style={styles.eyeIcon}
+                disabled={loading}
               >
                 <Ionicons
                   name={passwordVisible ? "eye-outline" : "eye-off-outline"}
                   size={20}
-                  color={colors.secondary}
+                  color={colors.textSecondary}
                 />
               </Pressable>
             </View>
@@ -144,29 +223,27 @@ export default function LoginScreen() {
             {/* Login Button */}
             <Pressable
               onPress={handleLogin}
-              disabled={loading || !email || !password}
+              disabled={loading || !email.trim() || !password.trim()}
               style={[
                 styles.loginButton,
-                (loading || !email || !password) && styles.loginButtonDisabled,
+                (loading || !email.trim() || !password.trim()) &&
+                  styles.loginButtonDisabled,
               ]}
             >
               {loading ? (
-                <ActivityIndicator color="#fff" size="small" />
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator color="#fff" size="small" />
+                  <Text style={styles.loadingText}>Signing In...</Text>
+                </View>
               ) : (
-                <>
+                <View style={styles.buttonContent}>
                   <Text style={styles.loginButtonText}>Sign In</Text>
                   <Ionicons name="arrow-forward" size={20} color="#fff" />
-                </>
+                </View>
               )}
             </Pressable>
 
             {/* Forgot Password */}
-            <Pressable
-              onPress={() => router.push("/(auth)/forgot-password")}
-              style={styles.forgotPasswordContainer}
-            >
-              <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-            </Pressable>
           </View>
 
           {/* Divider */}
@@ -179,8 +256,18 @@ export default function LoginScreen() {
           {/* Sign Up Section */}
           <View style={styles.signUpContainer}>
             <Text style={styles.signUpText}>Don't have an account?</Text>
-            <Pressable onPress={() => router.push("/(auth)/role-selection")}>
-              <Text style={styles.signUpLink}>Create Account</Text>
+            <Pressable
+              onPress={() => router.push("/(auth)/role-selection")}
+              disabled={loading}
+            >
+              <Text
+                style={[
+                  styles.signUpLink,
+                  loading && styles.signUpLinkDisabled,
+                ]}
+              >
+                Create Account
+              </Text>
             </Pressable>
           </View>
         </ScrollView>
@@ -207,22 +294,6 @@ const styles = StyleSheet.create({
     marginTop: height * 0.05,
     marginBottom: 30,
   },
-  logoPlaceholder: {
-    width: 100,
-    height: 100,
-    backgroundColor: "#f8f9fa",
-    borderRadius: 50,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
   logo: {
     width: 180,
     height: 180,
@@ -235,29 +306,30 @@ const styles = StyleSheet.create({
   welcomeTitle: {
     fontSize: 28,
     fontWeight: "bold",
-    color: colors.primary,
+    color: colors.text,
     marginBottom: 8,
   },
   welcomeSubtitle: {
     fontSize: 16,
-    color: colors.secondary,
+    color: colors.textSecondary,
     textAlign: "center",
   },
   errorContainer: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     backgroundColor: "#fee",
-    padding: 12,
-    borderRadius: 8,
+    padding: 16,
+    borderRadius: 12,
     marginBottom: 20,
     borderLeftWidth: 4,
     borderLeftColor: colors.error,
   },
   errorText: {
     color: colors.error,
-    marginLeft: 8,
+    marginLeft: 12,
     flex: 1,
     fontSize: 14,
+    lineHeight: 20,
   },
   formContainer: {
     marginBottom: 30,
@@ -265,12 +337,12 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#fff",
+    backgroundColor: colors.background,
     borderRadius: 12,
     marginBottom: 16,
     paddingHorizontal: 16,
     paddingVertical: 4,
-    shadowColor: "#000",
+    shadowColor: colors.text,
     shadowOffset: {
       width: 0,
       height: 1,
@@ -279,7 +351,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
     borderWidth: 1,
-    borderColor: "#f0f0f0",
+    borderColor: colors.border,
   },
   inputIcon: {
     marginRight: 12,
@@ -297,10 +369,6 @@ const styles = StyleSheet.create({
   },
   loginButton: {
     backgroundColor: colors.primary,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 16,
     borderRadius: 12,
     marginTop: 8,
     shadowColor: colors.primary,
@@ -311,17 +379,38 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 6,
+    minHeight: 56,
+    justifyContent: "center",
+    alignItems: "center",
   },
   loginButtonDisabled: {
-    backgroundColor: colors.secondary,
+    backgroundColor: colors.textSecondary,
     shadowOpacity: 0,
     elevation: 0,
+  },
+  buttonContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 16,
+  },
+  loadingContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 16,
   },
   loginButtonText: {
     color: "#fff",
     fontSize: 16,
     fontWeight: "600",
     marginRight: 8,
+  },
+  loadingText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
+    marginLeft: 8,
   },
   forgotPasswordContainer: {
     alignItems: "center",
@@ -341,11 +430,11 @@ const styles = StyleSheet.create({
   divider: {
     flex: 1,
     height: 1,
-    backgroundColor: "#e0e0e0",
+    backgroundColor: colors.border,
   },
   dividerText: {
     marginHorizontal: 16,
-    color: colors.secondary,
+    color: colors.textSecondary,
     fontSize: 14,
   },
   signUpContainer: {
@@ -355,7 +444,7 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   signUpText: {
-    color: colors.secondary,
+    color: colors.textSecondary,
     fontSize: 14,
     marginRight: 4,
   },
@@ -363,5 +452,24 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontSize: 14,
     fontWeight: "600",
+  },
+  signUpLinkDisabled: {
+    color: colors.textSecondary,
+  },
+  infoContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    backgroundColor: colors.bg_accent,
+    borderRadius: 8,
+    marginBottom: 20,
+  },
+  infoText: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    marginLeft: 6,
+    textAlign: "center",
   },
 });

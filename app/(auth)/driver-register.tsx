@@ -186,6 +186,7 @@ export default function DriverRegisterScreen() {
         tripsCompleted: 0,
         earnings: 0,
         ratings: [],
+        verified: false,
       });
 
       // Redirect to driver home (or application pending screen)

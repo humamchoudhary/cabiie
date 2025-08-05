@@ -12,11 +12,35 @@ import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "expo-router";
 import { MaterialIcons } from "@expo/vector-icons";
 import { colors } from "@/utils/colors";
-import { auth } from "@/config/firebase";
+import { auth, database, firestore } from "@/config/firebase";
+import { useEffect, useState } from "react";
+import { doc, getDoc } from "firebase/firestore";
 
 export default function UserProfileScreen() {
   const { user, signOut } = useAuth();
   const router = useRouter();
+  const [userData, setUserData] = useState();
+
+  useEffect(() => {
+    const fetchUserData = async () => {
+      if (!user?.uid) return;
+
+      try {
+        const docRef = doc(firestore, "users", user.uid);
+        const docSnap = await getDoc(docRef);
+
+        if (docSnap.exists()) {
+          setUserData(docSnap.data());
+        } else {
+          console.log("No such document!");
+        }
+      } catch (error) {
+        console.error("Error fetching user data:", error);
+      }
+    };
+
+    fetchUserData();
+  }, [user?.uid]);
 
   const menuItems = [
     {
@@ -82,7 +106,7 @@ export default function UserProfileScreen() {
         <View style={styles.infoItem}>
           <MaterialIcons name="phone" size={24} color={colors.textSecondary} />
           <Text style={styles.infoText}>
-            {user?.phoneNumber || "Not provided"}
+            {userData?.phone || "Not provided"}
           </Text>
         </View>
 

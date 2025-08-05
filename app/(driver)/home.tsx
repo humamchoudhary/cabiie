@@ -98,6 +98,29 @@ export default function DriverHomeScreen() {
   const [addresses, setAddresses] = useState<Record<string, string>>({});
   const [initialLoad, setInitialLoad] = useState(true);
 
+  const [userData, setUserData] = useState();
+
+  useEffect(() => {
+    const fetchUserData = async () => {
+      if (!user?.uid) return;
+
+      try {
+        const docRef = doc(firestore, "users", user.uid);
+        const docSnap = await getDoc(docRef);
+
+        if (docSnap.exists()) {
+          setUserData(docSnap.data());
+        } else {
+          console.log("No such document!");
+        }
+      } catch (error) {
+        console.error("Error fetching user data:", error);
+      }
+    };
+
+    fetchUserData();
+  }, [user?.uid]);
+
   // Check for active ride on mount
   useEffect(() => {
     if (!user?.uid) return;
@@ -144,7 +167,7 @@ export default function DriverHomeScreen() {
   useEffect(() => {
     if (initialLoad) return;
 
-    let intervalId: NodeJS.Timeout;
+    let intervalId;
 
     const updateLocation = async () => {
       setUpdatingLocation(true);
@@ -205,14 +228,23 @@ export default function DriverHomeScreen() {
       const requests: RideRequest[] = [];
       snapshot.forEach((childSnapshot) => {
         const request = childSnapshot.val();
-        if (request.status === "searching" && !request.driverId && location) {
+        if (
+          request.status === "searching" &&
+          !request.driverId &&
+          location &&
+          userData &&
+          request.rideType == userData.vehicleInfo.type
+        ) {
+          console.log(userData.vehicleInfo);
+          console.log(request.rideType);
           const distance = calculateDistanceInKm(
             location.coords.latitude,
             location.coords.longitude,
             request.pickupLocation.latitude,
             request.pickupLocation.longitude,
           );
-
+          console.log(distance);
+          console.log(location.coords.latitude, location.coords.longitude);
           if (distance <= radius) {
             requests.push({
               ...request,

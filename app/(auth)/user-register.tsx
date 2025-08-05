@@ -63,6 +63,7 @@ export default function UserRegisterScreen() {
         createdAt: new Date().toISOString(),
         rating: 5, // Default rating for new users
         tripsCompleted: 0,
+        verified: true,
       });
 
       // Redirect to user home
@@ -168,7 +169,7 @@ export default function UserRegisterScreen() {
         disabled={loading}
         className="p-4 rounded-lg mb-4"
         style={{
-          backgroundColor: loading ? colors.primaryLight : colors.primary,
+          backgroundColor: loading ? colors.primary : colors.primary,
           opacity: loading ? 0.7 : 1,
         }}
       >

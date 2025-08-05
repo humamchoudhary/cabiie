@@ -9,6 +9,7 @@ import { useAuth } from "@/context/AuthContext";
 import { StatusBar } from "expo-status-bar";
 import "@/global.css";
 import { colors } from "@/utils/colors";
+import { KeyboardAvoidingView, Platform } from "react-native";
 
 function AuthLayout() {
   const { loading } = useAuth();
@@ -38,9 +39,18 @@ function AuthLayout() {
 export default function RootLayout() {
   // seedDemoDrivers();
   return (
-    <AuthProvider>
-      <StatusBar hidden={true} />
-      <AuthLayout />
-    </AuthProvider>
+    <KeyboardAvoidingView
+      style={{
+        flex: 1,
+        backgroundColor: colors.background,
+      }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
+    >
+      <AuthProvider>
+        <StatusBar hidden={true} />
+        <AuthLayout />
+      </AuthProvider>
+    </KeyboardAvoidingView>
   );
 }

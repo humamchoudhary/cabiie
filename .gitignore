@@ -37,7 +37,3 @@ yarn-error.*
 *.tsbuildinfo
 
 app-example
-.env
-config/firebase.ts
-app.json
-backapp.json

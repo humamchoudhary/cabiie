@@ -103,6 +103,7 @@ export default function UserHomeScreen() {
     null,
   );
   const [estimatedTime, setEstimatedTime] = useState<string | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
 
   // Get user location
   useEffect(() => {
@@ -302,18 +303,22 @@ export default function UserHomeScreen() {
   };
 
   const searchPlaces = async (query: string) => {
-    if (query.length < 3) {
+    if (query.length < 2) {
       setSearchResults([]);
       setShowSearchResults(false);
+      setIsSearching(false);
       return;
     }
+
+    setIsSearching(true);
+    setShowSearchResults(true);
 
     try {
       const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
       const response = await fetch(
         `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(
           query,
-        )}&key=${apiKey}&language=en`,
+        )}&key=${apiKey}&language=en&location=${location?.coords.latitude},${location?.coords.longitude}&radius=50000`,
       );
 
       const json = await response.json();
@@ -325,35 +330,47 @@ export default function UserHomeScreen() {
           json.error_message,
         );
         setSearchResults([]);
-        setShowSearchResults(false);
+        setIsSearching(false);
         return;
       }
 
       const results = await Promise.all(
-        json.predictions.map(async (prediction: any) => {
+        json.predictions.slice(0, 10).map(async (prediction: any) => {
           const details = await fetchPlaceDetails(prediction.place_id, apiKey);
 
-          if (details) {
+          if (details && location) {
+            const distance = calculateDistanceInKm(
+              location.coords.latitude,
+              location.coords.longitude,
+              details.latitude,
+              details.longitude,
+            );
+
             return {
               id: prediction.place_id,
               name: prediction.structured_formatting.main_text,
               address: prediction.description,
               latitude: details.latitude,
               longitude: details.longitude,
+              distance: distance,
             };
           } else {
             return null;
           }
         }),
       );
+      console.log(results.length);
 
-      const validResults = results.filter((item) => item !== null);
+      const validResults = results
+        .filter((item) => item !== null)
+        .sort((a, b) => a.distance - b.distance);
+
       setSearchResults(validResults as any[]);
-      setShowSearchResults(true);
+      setIsSearching(false);
     } catch (error) {
       console.error("Search error:", error);
       setSearchResults([]);
-      setShowSearchResults(false);
+      setIsSearching(false);
     }
   };
 
@@ -490,8 +507,15 @@ export default function UserHomeScreen() {
     }
   };
 
+  const clearSearch = () => {
+    setDestination("");
+    setShowSearchResults(false);
+    setSearchResults([]);
+    setSelectedLocation(null);
+  };
+
   return (
-    <View style={styles.container}>
+    <>
       {/* Map View */}
       <MapView
         ref={mapRef}
@@ -594,27 +618,6 @@ export default function UserHomeScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Search Results Overlay */}
-      {showSearchResults && searchResults.length > 0 && (
-        <View style={styles.searchResultsOverlay}>
-          <ScrollView>
-            {searchResults.map((place, index) => (
-              <Pressable
-                key={place.id}
-                onPress={() => selectSearchResult(place)}
-                style={[
-                  styles.searchResultItem,
-                  index < searchResults.length - 1 && styles.searchResultBorder,
-                ]}
-              >
-                <Text style={styles.searchResultName}>{place.name}</Text>
-                <Text style={styles.searchResultAddress}>{place.address}</Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-        </View>
-      )}
-
       {/* Bottom Panel */}
       <Animated.View style={[styles.bottomPanel, { height: slideAnim }]}>
         {/* Drag Handle */}
@@ -626,25 +629,120 @@ export default function UserHomeScreen() {
         </TouchableOpacity>
 
         <ScrollView
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator={true}
           style={styles.panelContent}
+          keyboardShouldPersistTaps="handled"
         >
           {/* Destination Input */}
           <View style={styles.destinationSection}>
             <Text style={styles.sectionTitle}>Where to?</Text>
             <View style={styles.destinationInputContainer}>
-              <Feather name="search" size={20} color={colors.textSecondary} />
-              <TextInput
-                placeholder="Search destinations..."
-                placeholderTextColor={colors.textSecondary}
-                value={destination}
-                onChangeText={(text) => {
-                  setDestination(text);
-                  searchPlaces(text);
-                }}
-                style={styles.destinationInput}
-              />
+              <View style={styles.inputWrapper}>
+                <Feather name="search" size={20} color={colors.textSecondary} />
+                <TextInput
+                  placeholder="Search destinations..."
+                  placeholderTextColor={colors.textSecondary}
+                  value={destination}
+                  onChangeText={(text) => {
+                    setDestination(text);
+                    searchPlaces(text);
+                  }}
+                  style={styles.destinationInput}
+                  autoComplete="off"
+                  autoCorrect={false}
+                />
+                {destination.length > 0 && (
+                  <TouchableOpacity
+                    onPress={clearSearch}
+                    style={styles.clearButton}
+                  >
+                    <Ionicons
+                      name="close-circle"
+                      size={20}
+                      color={colors.textSecondary}
+                    />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Search Results */}
+              {showSearchResults && (
+                <View style={styles.searchResultsContainer}>
+                  {isSearching ? (
+                    <View style={styles.searchLoadingContainer}>
+                      <ActivityIndicator size="small" color={colors.primary} />
+                      <Text style={styles.searchLoadingText}>Searching...</Text>
+                    </View>
+                  ) : searchResults.length > 0 ? (
+                    <>
+                      <ScrollView
+                        showsVerticalScrollIndicator={false}
+                        keyboardShouldPersistTaps="handled"
+                      >
+                        {searchResults.map((place, index) => (
+                          <Pressable
+                            key={place.id}
+                            onPress={() => selectSearchResult(place)}
+                            style={[
+                              styles.searchResultItem,
+                              index < searchResults.length - 1 &&
+                                styles.searchResultBorder,
+                            ]}
+                          >
+                            <View style={styles.searchResultIcon}>
+                              <MaterialIcons
+                                name="place"
+                                size={18}
+                                color={colors.primary}
+                              />
+                            </View>
+                            <View style={styles.searchResultContent}>
+                              <Text
+                                style={styles.searchResultName}
+                                numberOfLines={1}
+                              >
+                                {place.name}
+                              </Text>
+                              <Text
+                                style={styles.searchResultAddress}
+                                numberOfLines={2}
+                              >
+                                {place.address}
+                              </Text>
+                            </View>
+                            <View style={styles.searchResultDistance}>
+                              <Text style={styles.searchResultDistanceText}>
+                                {place.distance < 1
+                                  ? `${(place.distance * 1000).toFixed(0)}m`
+                                  : `${place.distance.toFixed(1)}km`}
+                              </Text>
+                              <Feather
+                                name="arrow-up-right"
+                                size={14}
+                                color={colors.textSecondary}
+                              />
+                            </View>
+                          </Pressable>
+                        ))}
+                      </ScrollView>
+                    </>
+                  ) : destination.length >= 2 ? (
+                    <View style={styles.noResultsContainer}>
+                      <Feather
+                        name="map-pin"
+                        size={24}
+                        color={colors.textSecondary}
+                      />
+                      <Text style={styles.noResultsText}>No places found</Text>
+                      <Text style={styles.noResultsSubtext}>
+                        Try searching with different keywords
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+              )}
             </View>
+
             <Text
               style={[
                 styles.destinationStatus,
@@ -810,7 +908,7 @@ export default function UserHomeScreen() {
           </Pressable>
         </ScrollView>
       </Animated.View>
-    </View>
+    </>
   );
 }
 
@@ -861,51 +959,6 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 50,
     shadowColor: colors.text,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  searchResultsOverlay: {
-    position: "absolute",
-    top: 130,
-    left: 20,
-    right: 20,
-    backgroundColor: colors.background,
-    borderRadius: 16,
-    maxHeight: 200,
-    shadowColor: colors.text,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 10,
-  },
-  searchResultItem: {
-    padding: 16,
-  },
-  searchResultBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  searchResultName: {
-    color: colors.text,
-    fontWeight: "600",
-    fontSize: 16,
-  },
-  searchResultAddress: {
-    color: colors.textSecondary,
-    fontSize: 14,
-    marginTop: 4,
-  },
-  bottomPanel: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: colors.background,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    shadowColor: colors.text,
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.1,
     shadowRadius: 12,
@@ -935,19 +988,119 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   destinationInputContainer: {
-    flexDirection: "row",
-    alignItems: "center",
     backgroundColor: colors.bg_accent,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.border,
+    overflow: "hidden",
+  },
+  inputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 16,
+    paddingVertical: 4,
   },
   destinationInput: {
     flex: 1,
-    padding: 16,
+    padding: 12,
     color: colors.text,
     fontSize: 16,
+    marginLeft: 8,
+  },
+  clearButton: {
+    padding: 4,
+  },
+  searchResultsContainer: {
+    backgroundColor: colors.background,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  searchResultsHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: colors.bg_accent,
+  },
+  searchResultsTitle: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  searchResultsSubtitle: {
+    color: colors.textSecondary,
+    fontSize: 12,
+  },
+  searchLoadingContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 20,
+    gap: 8,
+  },
+  searchLoadingText: {
+    color: colors.textSecondary,
+    fontSize: 14,
+  },
+  searchResultItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: colors.background,
+  },
+  searchResultBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  searchResultIcon: {
+    backgroundColor: colors.bg_accent,
+    padding: 8,
+    borderRadius: 50,
+    marginRight: 12,
+  },
+  searchResultContent: {
+    flex: 1,
+    marginRight: 8,
+  },
+  searchResultName: {
+    color: colors.text,
+    fontWeight: "600",
+    fontSize: 15,
+    marginBottom: 2,
+  },
+  searchResultAddress: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  searchResultDistance: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  searchResultDistanceText: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: "500",
+  },
+  noResultsContainer: {
+    alignItems: "center",
+    paddingVertical: 32,
+    paddingHorizontal: 20,
+  },
+  noResultsText: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: "500",
+    marginTop: 8,
+  },
+  noResultsSubtext: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    marginTop: 4,
+    textAlign: "center",
   },
   destinationStatus: {
     color: colors.textSecondary,
@@ -1072,5 +1225,20 @@ const styles = StyleSheet.create({
   },
   requestButtonTextDisabled: {
     color: colors.textSecondary,
+  },
+
+  bottomPanel: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: colors.background,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    shadowColor: colors.text,
+
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
   },
 });
